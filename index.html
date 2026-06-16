@@ -331,9 +331,11 @@ const SK='vetoria_v2';
 const SUPA_URL='https://nrntinlwmsxxugmxxoud.supabase.co';
 const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ybnRpbmx3bXN4eHVnbXh4b3VkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1OTIwNDEsImV4cCI6MjA5NzE2ODA0MX0.AkZZUbomQQp3idmlzSflngFdwUiI-kD7Kr_EzwISX_w';
 let sb=null; try{ if(typeof window!=='undefined'&&window.supabase&&SUPA_URL&&SUPA_KEY){ sb=window.supabase.createClient(SUPA_URL,SUPA_KEY,{auth:{persistSession:true,autoRefreshToken:true}}); } }catch(e){ console.warn('Supabase init falhou:',e); }
-let modoDemo=false, clinicaAtual=null, membroAtual=null;
+let modoDemo=false, clinicaAtual=null, membroAtual=null, _snap={}, _syncTimer=null;
+const COL_TIPOS=['profissionais','produtos','agendamentos','internacoes','documentos','orcamentos','planos','assinaturas'];
+const SEED_TIPOS=['profissionais','produtos','planos'];
 function supaOn(){return !!sb && !modoDemo;}
-function save(){try{localStorage.setItem(SK,JSON.stringify(db));}catch(e){}}
+function save(){try{localStorage.setItem(SK,JSON.stringify(db));}catch(e){} if(typeof agendarSync==='function')agendarSync();}
 function load(){try{const r=localStorage.getItem(SK);if(r)return JSON.parse(r);}catch(e){}return null;}
 
 /* ---------------- Catálogos ---------------- */
@@ -1900,6 +1902,18 @@ async function carregarClinica(){
     db.financeiro=(fn||[]).map(mapFinanceiro);
     const { data:cx } = await sb.from('caixa').select('*').eq('clinica_id',clinicaAtual).limit(1);
     if(cx&&cx[0]&&cx[0].dados&&Object.keys(cx[0].dados).length) db.caixa=cx[0].dados;
+    // ---- demais módulos (tabela genérica colecoes) ----
+    const { data:cols } = await sb.from('colecoes').select('*').eq('clinica_id',clinicaAtual);
+    const grp={}; (cols||[]).forEach(r=>{ (grp[r.tipo]=grp[r.tipo]||[]).push(r.dados); });
+    for(const tipo of COL_TIPOS){
+      if(grp[tipo]) db[tipo]=grp[tipo];
+      else if(SEED_TIPOS.includes(tipo) && db[tipo] && db[tipo].length){ await persistirColecao(tipo, db[tipo]); /* mantém o seed em memória */ }
+      else db[tipo]=[];
+    }
+    const cfgRow=(cols||[]).find(r=>r.tipo==='_config');
+    if(cfgRow&&cfgRow.dados){ if(cfgRow.dados.empresa)db.empresa=cfgRow.dados.empresa; if(cfgRow.dados.config)db.config=cfgRow.dados.config; }
+    else { await persistirConfig(); }
+    initSnap();
     return true;
   }catch(err){ console.error('carregarClinica:',err); toast('Erro ao carregar dados da clínica','err'); return true; }
 }
@@ -1927,6 +1941,38 @@ async function removerConta(id){ if(!supaOn())return; try{ await sb.from('contas
 async function persistirForma(f){ if(!supaOn()||!f)return; try{ const {error}=await sb.from('formas_pag').upsert(unmapForma(f)); if(error)throw error; }catch(e){ console.error('persistirForma',e); toast('Falha ao salvar forma na nuvem','err'); } }
 async function removerForma(id){ if(!supaOn())return; try{ await sb.from('formas_pag').delete().eq('clinica_id',clinicaAtual).eq('id',id); }catch(e){ console.error(e); } }
 async function persistirCaixa(){ if(!supaOn())return; try{ await sb.from('caixa').upsert({clinica_id:clinicaAtual, dados:db.caixa||{}, atualizado_em:new Date().toISOString()}); }catch(e){ console.error('persistirCaixa',e); } }
+
+// ---- sync genérico por diff (módulos restantes + pets aninhados) ----
+function snapId(o){ try{ return JSON.stringify(o); }catch(e){ return Math.random()+''; } }
+function initSnap(){ _snap={}; COL_TIPOS.forEach(t=>{ _snap[t]={}; (db[t]||[]).forEach(o=>{ if(o&&o.id!=null)_snap[t][o.id]=snapId(o); }); }); _snap._pets={}; (db.clientes||[]).forEach(c=>(c.pets||[]).forEach(p=>{ _snap._pets[p.id]=snapId(p); })); _snap._cfg=snapId({e:db.empresa,c:db.config}); }
+function agendarSync(){ if(!supaOn()||!clinicaAtual)return; clearTimeout(_syncTimer); _syncTimer=setTimeout(syncDiff,500); }
+async function persistirColecao(tipo,arr){ if(!supaOn()||!arr||!arr.length)return; try{ await sb.from('colecoes').upsert(arr.map(o=>({clinica_id:clinicaAtual,tipo,id:String(o.id),dados:o}))); }catch(e){ console.error('persistirColecao '+tipo,e); } }
+async function persistirConfig(){ if(!supaOn())return; try{ await sb.from('colecoes').upsert({clinica_id:clinicaAtual,tipo:'_config',id:'empresa',dados:{empresa:db.empresa,config:db.config}}); }catch(e){ console.error('persistirConfig',e); } }
+async function syncDiff(){
+  if(!supaOn()||!clinicaAtual)return;
+  try{
+    const ups=[], dels=[];
+    COL_TIPOS.forEach(t=>{
+      const atual={}; (db[t]||[]).forEach(o=>{ if(o&&o.id!=null)atual[o.id]=o; });
+      const prev=_snap[t]||{};
+      Object.keys(atual).forEach(id=>{ if(prev[id]!==snapId(atual[id])) ups.push({clinica_id:clinicaAtual,tipo:t,id:String(id),dados:atual[id]}); });
+      Object.keys(prev).forEach(id=>{ if(!(id in atual)) dels.push({tipo:t,id:String(id)}); });
+      _snap[t]={}; Object.keys(atual).forEach(id=>{ _snap[t][id]=snapId(atual[id]); });
+    });
+    // pets (prontuário/vacinas/edições aninhadas)
+    const petsAtual={}; (db.clientes||[]).forEach(c=>(c.pets||[]).forEach(p=>{ petsAtual[p.id]={p,cli:c.id}; }));
+    const petUps=[];
+    Object.keys(petsAtual).forEach(id=>{ if(_snap._pets[id]!==snapId(petsAtual[id].p)) petUps.push(petsAtual[id]); });
+    _snap._pets={}; Object.keys(petsAtual).forEach(id=>{ _snap._pets[id]=snapId(petsAtual[id].p); });
+    // config
+    const cfgH=snapId({e:db.empresa,c:db.config}); const cfgMudou=_snap._cfg!==cfgH; _snap._cfg=cfgH;
+    // executa
+    if(ups.length) await sb.from('colecoes').upsert(ups);
+    for(const d of dels){ try{ await sb.from('colecoes').delete().eq('clinica_id',clinicaAtual).eq('tipo',d.tipo).eq('id',d.id); }catch(e){ console.error(e); } }
+    for(const pu of petUps){ await persistirPet(pu.p, pu.cli); }
+    if(cfgMudou) await persistirConfig();
+  }catch(e){ console.error('syncDiff',e); }
+}
 
 // ---- migração: enviar os dados locais (ex: 690 clientes importados) p/ a nuvem ----
 async function migrarLocalParaNuvem(){
