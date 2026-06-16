@@ -1426,18 +1426,22 @@ function finalizarVenda(){
  const autorizadoPor=$('#pgAutoriz')?$('#pgAutoriz').value:'';
  if(c.descValor>0&&!autorizadoPor){toast('Informe quem autorizou o desconto','err');return;}
  const vend=$('#pdvVend').value;const cliNome=pdvCliente?cli(pdvCliente).nome:'Consumidor';
- const venda={id:uid('vd'),data:todayISO(),clienteId:pdvCliente||null,profId:vend,itens:carrinho.map(i=>({nome:i.nome,qtd:i.qtd,unit:i.unit})),subtotal:pgSub,desconto:c.descValor,autorizadoPor,parcelas:n,pagamentos:[{forma:fp.nome,formaId:fp.id,valor:total,parcelas:n,taxa:c.taxa}],total,status:'pago'};
+ const venda={id:novoId('vd'),data:todayISO(),clienteId:pdvCliente||null,profId:vend,itens:carrinho.map(i=>({nome:i.nome,qtd:i.qtd,unit:i.unit})),subtotal:pgSub,desconto:c.descValor,autorizadoPor,parcelas:n,pagamentos:[{forma:fp.nome,formaId:fp.id,valor:total,parcelas:n,taxa:c.taxa}],total,status:'pago'};
  db.vendas.push(venda);
  carrinho.forEach(i=>{const p=prodOf(i.id);if(p&&p.tipo==='produto'&&p.estoque!=null)p.estoque=Math.max(0,p.estoque-i.qtd);});
  // gera 1 recebível por parcela, com taxa/líquido e data de liberação
  const vC=Math.round(total*100),lC=Math.round(c.liquido*100),bV=Math.floor(vC/n),bL=Math.floor(lC/n);
+ const novasFin=[];
  for(let k=1;k<=n;k++){
    const vk=(k===n?vC-bV*(n-1):bV)/100, lk=(k===n?lC-bL*(n-1):bL)/100;
    const lib=fp.prazoDias?fmtDate(new Date(Date.now()+fp.prazoDias*k*864e5)):todayISO();
-   db.financeiro.push({id:uid('f'),tipo:'receita',desc:'Venda — '+cliNome+(n>1?` (parcela ${k}/${n})`:''),cat:'Vendas',valor:vk,venc:lib,pago:true,forma:fp.nome,formaId:fp.id,contaId:fp.contaId,taxa:c.taxa,liquido:lk,liberacao:lib,parcela:n>1?`${k}/${n}`:'',data:todayISO()});
+   const reg={id:novoId('f'),tipo:'receita',desc:'Venda — '+cliNome+(n>1?` (parcela ${k}/${n})`:''),cat:'Vendas',valor:vk,venc:lib,pago:true,forma:fp.nome,formaId:fp.id,contaId:fp.contaId,taxa:c.taxa,liquido:lk,liberacao:lib,parcela:n>1?`${k}/${n}`:'',data:todayISO()};
+   db.financeiro.push(reg);novasFin.push(reg);
  }
- if(fp.tipo==='dinheiro'&&db.caixa&&db.caixa.aberto){const now=new Date();db.caixa.movimentos.push({h:String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0'),tipo:'entrada',desc:'Venda #'+venda.id,valor:total,forma:fp.nome,formaId:fp.id});}
- save();closeModal();toast('Venda finalizada · '+BRL(total)+(n>1?` em ${n}×`:'')+(c.taxa?' (líq. '+BRL(c.liquido)+')':'')+' ✓');carrinho=[];pdvCliente='';pdvBusca='';renderNav();renderPDV();
+ let movCaixa=false;
+ if(fp.tipo==='dinheiro'&&db.caixa&&db.caixa.aberto){const now=new Date();db.caixa.movimentos.push({h:String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0'),tipo:'entrada',desc:'Venda #'+venda.id,valor:total,forma:fp.nome,formaId:fp.id});movCaixa=true;}
+ save();persistirVenda(venda);persistirFinanceiroLista(novasFin);if(movCaixa)persistirCaixa();
+ closeModal();toast('Venda finalizada · '+BRL(total)+(n>1?` em ${n}×`:'')+(c.taxa?' (líq. '+BRL(c.liquido)+')':'')+' ✓');carrinho=[];pdvCliente='';pdvBusca='';renderNav();renderPDV();
 }
 function verVendas(){
  const list=db.vendas.slice().sort((a,b)=>b.data.localeCompare(a.data));
@@ -1681,12 +1685,13 @@ function salvarLancamento(){
  const venc=$('#lcVenc').value;
  const liquido=tipo==='receita'?+(valor*(1-(fp.taxa||0)/100)).toFixed(2):valor;
  const liberacao=(pago&&fp.prazoDias)?fmtDate(new Date(parseISO(venc).getTime()+fp.prazoDias*864e5)):venc;
- db.financeiro.push({id:uid('f'),tipo,desc,cat:$('#lcCat').value,valor,venc,pago,forma:fp.nome,formaId:fp.id,contaId:fp.contaId,taxa:fp.taxa||0,liquido,liberacao,data:pago?venc:''});
- save();closeModal();toast('Lançamento salvo ✓');renderFinanceiro();
+ const regLc={id:novoId('f'),tipo,desc,cat:$('#lcCat').value,valor,venc,pago,forma:fp.nome,formaId:fp.id,contaId:fp.contaId,taxa:fp.taxa||0,liquido,liberacao,data:pago?venc:''};
+ db.financeiro.push(regLc);
+ save();persistirFinanceiro(regLc);closeModal();toast('Lançamento salvo ✓');renderFinanceiro();
 }
-function abrirCaixa(){db.caixa={aberto:true,abertura:todayISO()+' '+new Date().toTimeString().slice(0,5),valorInicial:0,operador:usuarioAtual().nome,movimentos:[]};save();toast('Caixa aberto ✓');(curView==='pdv'?renderPDV():renderFinanceiro());}
-function sangria(){const v=prompt('Valor da sangria (R$):');const n=parseFloat((v||'').replace(',','.'));if(!n)return;db.caixa.movimentos.push({h:new Date().toTimeString().slice(0,5),tipo:'sangria',desc:'Sangria',valor:-Math.abs(n),forma:'Dinheiro'});save();toast('Sangria registrada');(curView==='pdv'?renderPDV():renderFinanceiro());}
-function fecharCaixa(saldo){if(!confirm('Fechar o caixa com saldo de '+BRL(saldo)+'?'))return;db.caixa.aberto=false;save();toast('Caixa fechado ✓');(curView==='pdv'?renderPDV():renderFinanceiro());}
+function abrirCaixa(){db.caixa={aberto:true,abertura:todayISO()+' '+new Date().toTimeString().slice(0,5),valorInicial:0,operador:usuarioAtual().nome,movimentos:[]};save();persistirCaixa();toast('Caixa aberto ✓');(curView==='pdv'?renderPDV():renderFinanceiro());}
+function sangria(){const v=prompt('Valor da sangria (R$):');const n=parseFloat((v||'').replace(',','.'));if(!n)return;db.caixa.movimentos.push({h:new Date().toTimeString().slice(0,5),tipo:'sangria',desc:'Sangria',valor:-Math.abs(n),forma:'Dinheiro'});save();persistirCaixa();toast('Sangria registrada');(curView==='pdv'?renderPDV():renderFinanceiro());}
+function fecharCaixa(saldo){if(!confirm('Fechar o caixa com saldo de '+BRL(saldo)+'?'))return;db.caixa.aberto=false;save();persistirCaixa();toast('Caixa fechado ✓');(curView==='pdv'?renderPDV():renderFinanceiro());}
 function caixaPainelHTML(){
  const c=db.caixa;
  if(!c||!c.aberto){
@@ -1878,6 +1883,23 @@ async function carregarClinica(){
     const clientes=(cls||[]).map(mapCliente), byId={}; clientes.forEach(c=>byId[c.id]=c);
     (pts||[]).forEach(row=>{ const c=byId[row.cliente_id]; if(c) c.pets.push(mapPet(row)); });
     db.clientes=clientes;
+    // ---- financeiro: contas, formas, vendas, lançamentos, caixa ----
+    const { data:contasRows } = await sb.from('contas').select('*').eq('clinica_id',clinicaAtual);
+    if(!contasRows||!contasRows.length){
+      // primeira vez: semeia contas e formas padrão nesta clínica
+      try{ await sb.from('contas').upsert(CONTAS_PADRAO.map(c=>unmapConta(c))); await sb.from('formas_pag').upsert(FORMAS_PADRAO.map(f=>unmapForma(f))); }catch(e){ console.error('seed contas/formas',e); }
+      db.contas=CONTAS_PADRAO.map(c=>({...c})); db.formasPag=FORMAS_PADRAO.map(f=>({...f}));
+    } else {
+      db.contas=contasRows.map(mapConta);
+      const { data:formasRows } = await sb.from('formas_pag').select('*').eq('clinica_id',clinicaAtual);
+      db.formasPag=(formasRows&&formasRows.length)?formasRows.map(mapForma):FORMAS_PADRAO.map(f=>({...f}));
+    }
+    const { data:vd } = await sb.from('vendas').select('*').eq('clinica_id',clinicaAtual);
+    db.vendas=(vd||[]).map(mapVenda);
+    const { data:fn } = await sb.from('financeiro').select('*').eq('clinica_id',clinicaAtual);
+    db.financeiro=(fn||[]).map(mapFinanceiro);
+    const { data:cx } = await sb.from('caixa').select('*').eq('clinica_id',clinicaAtual).limit(1);
+    if(cx&&cx[0]&&cx[0].dados&&Object.keys(cx[0].dados).length) db.caixa=cx[0].dados;
     return true;
   }catch(err){ console.error('carregarClinica:',err); toast('Erro ao carregar dados da clínica','err'); return true; }
 }
@@ -1885,6 +1907,26 @@ async function persistirCliente(c){ if(!supaOn()||!c)return; try{ const {error}=
 async function persistirPet(p,cliId){ if(!supaOn()||!p)return; try{ const {error}=await sb.from('pets').upsert(unmapPet(p,cliId)); if(error)throw error; }catch(err){ console.error('persistirPet:',err); toast('Falha ao salvar pet na nuvem','err'); } }
 async function removerCliente(id){ if(!supaOn())return; try{ await sb.from('clientes').delete().eq('id',id); }catch(e){ console.error(e); } }
 async function removerPet(id){ if(!supaOn())return; try{ await sb.from('pets').delete().eq('id',id); }catch(e){ console.error(e); } }
+
+// ---- vendas / financeiro / contas / formas / caixa ----
+function dnull(d){ return (d&&d!=='')?d:null; }
+function mapVenda(row){ const v=(row.extra&&typeof row.extra==='object')?{...row.extra}:{}; v.id=row.id; if(!v.data)v.data=row.data; if(v.total==null)v.total=row.total; return v; }
+function unmapVenda(v){ return { id:v.id, clinica_id:clinicaAtual, data:dnull(v.data), cliente_id:ehUuid(v.clienteId)?v.clienteId:null, prof_id:v.profId||null, total:v.total, extra:v }; }
+function mapFinanceiro(row){ const f=(row.extra&&typeof row.extra==='object')?{...row.extra}:{}; f.id=row.id; return f; }
+function unmapFinanceiro(f){ return { id:f.id, clinica_id:clinicaAtual, tipo:f.tipo, descricao:f.desc||'', categoria:f.cat||'', valor:f.valor, vencimento:dnull(f.venc), pago:!!f.pago, forma:f.forma||'', forma_id:f.formaId||null, conta_id:f.contaId||null, liquido:f.liquido, liberacao:dnull(f.liberacao), data:dnull(f.data), parcela:f.parcela||'', extra:f }; }
+function mapConta(row){ const c=(row.extra&&typeof row.extra==='object')?{...row.extra}:{}; c.id=row.id; c.nome=c.nome??row.nome; if(c.saldoInicial==null)c.saldoInicial=row.saldo_inicial; return c; }
+function unmapConta(c){ return { id:c.id, clinica_id:clinicaAtual, nome:c.nome, tipo:c.tipo, saldo_inicial:c.saldoInicial||0, extra:c }; }
+function mapForma(row){ const f=(row.extra&&typeof row.extra==='object')?{...row.extra}:{}; f.id=row.id; f.nome=f.nome??row.nome; return f; }
+function unmapForma(f){ return { id:f.id, clinica_id:clinicaAtual, nome:f.nome, tipo:f.tipo, conta_id:f.contaId||null, taxa:f.taxa||0, prazo_dias:f.prazoDias||0, max_parcelas:f.maxParcelas||null, extra:f }; }
+
+async function persistirVenda(v){ if(!supaOn()||!v)return; try{ const {error}=await sb.from('vendas').upsert(unmapVenda(v)); if(error)throw error; }catch(e){ console.error('persistirVenda',e); toast('Falha ao salvar venda na nuvem','err'); } }
+async function persistirFinanceiro(f){ if(!supaOn()||!f)return; try{ const {error}=await sb.from('financeiro').upsert(unmapFinanceiro(f)); if(error)throw error; }catch(e){ console.error('persistirFinanceiro',e); toast('Falha ao salvar lançamento na nuvem','err'); } }
+async function persistirFinanceiroLista(arr){ if(!supaOn()||!arr||!arr.length)return; try{ const {error}=await sb.from('financeiro').upsert(arr.map(unmapFinanceiro)); if(error)throw error; }catch(e){ console.error('persistirFinanceiroLista',e); toast('Falha ao salvar lançamentos na nuvem','err'); } }
+async function persistirConta(c){ if(!supaOn()||!c)return; try{ const {error}=await sb.from('contas').upsert(unmapConta(c)); if(error)throw error; }catch(e){ console.error('persistirConta',e); toast('Falha ao salvar conta na nuvem','err'); } }
+async function removerConta(id){ if(!supaOn())return; try{ await sb.from('contas').delete().eq('clinica_id',clinicaAtual).eq('id',id); }catch(e){ console.error(e); } }
+async function persistirForma(f){ if(!supaOn()||!f)return; try{ const {error}=await sb.from('formas_pag').upsert(unmapForma(f)); if(error)throw error; }catch(e){ console.error('persistirForma',e); toast('Falha ao salvar forma na nuvem','err'); } }
+async function removerForma(id){ if(!supaOn())return; try{ await sb.from('formas_pag').delete().eq('clinica_id',clinicaAtual).eq('id',id); }catch(e){ console.error(e); } }
+async function persistirCaixa(){ if(!supaOn())return; try{ await sb.from('caixa').upsert({clinica_id:clinicaAtual, dados:db.caixa||{}, atualizado_em:new Date().toISOString()}); }catch(e){ console.error('persistirCaixa',e); } }
 
 // ---- migração: enviar os dados locais (ex: 690 clientes importados) p/ a nuvem ----
 async function migrarLocalParaNuvem(){
@@ -2135,11 +2177,12 @@ function abrirOrcamento(id){
 function mudaOrc(id,st){const o=db.orcamentos.find(x=>x.id===id);o.status=st;save();toast('Orçamento '+ST_ORC[st].lbl.toLowerCase());closeModal();renderNav();renderOrcamentos();}
 function faturarOrcamento(id){
  const o=db.orcamentos.find(x=>x.id===id);
- const venda={id:uid('vd'),data:todayISO(),clienteId:o.clienteId,profId:o.profId,itens:o.itens,pagamentos:[{forma:'A definir',valor:o.total}],total:o.total,status:'pago',origem:'orcamento'};
+ const venda={id:novoId('vd'),data:todayISO(),clienteId:o.clienteId,profId:o.profId,itens:o.itens,pagamentos:[{forma:'A definir',valor:o.total}],total:o.total,status:'pago',origem:'orcamento'};
  db.vendas.push(venda);
  o.itens.forEach(i=>{const p=db.produtos.find(x=>x.nome===i.nome);if(p&&p.tipo==='produto'&&p.estoque!=null)p.estoque=Math.max(0,p.estoque-i.qtd);});
- db.financeiro.push({id:uid('f'),tipo:'receita',desc:'Orçamento faturado — '+(cli(o.clienteId)?.nome||''),cat:'Serviços',valor:o.total,venc:todayISO(),pago:true,forma:'A definir',formaId:'fp_pixc6',contaId:'ct_c6',data:todayISO()});
- o.status='faturado';save();closeModal();toast('Orçamento faturado · '+BRL(o.total)+' ✓');renderNav();renderOrcamentos();
+ const regOrc={id:novoId('f'),tipo:'receita',desc:'Orçamento faturado — '+(cli(o.clienteId)?.nome||''),cat:'Serviços',valor:o.total,venc:todayISO(),pago:true,forma:'A definir',formaId:'fp_pixc6',contaId:'ct_c6',data:todayISO()};
+ db.financeiro.push(regOrc);
+ o.status='faturado';save();persistirVenda(venda);persistirFinanceiro(regOrc);closeModal();toast('Orçamento faturado · '+BRL(o.total)+' ✓');renderNav();renderOrcamentos();
 }
 function imprimirOrcamento(id){
  const o=db.orcamentos.find(x=>x.id===id);const c=cli(o.clienteId);const r=petOf(o.petId);const e=db.empresa;
@@ -2382,7 +2425,7 @@ function salvarAssinatura(){
  if(!db.assinaturas)db.assinaturas=[];
  db.assinaturas.push({id:uid('as'),planoId,clienteId:cliente.id,petId,inicio,proxCobranca:prox,status:'ativo',saldo:pl.qtdServicos,historico:[{data:inicio,txt:'Assinatura iniciada'}]});
  // primeira cobrança como receita
- db.financeiro.push({id:uid('f'),tipo:'receita',desc:'Assinatura — '+pl.nome+' ('+cliente.nome+')',cat:'Planos',valor:pl.preco,venc:inicio,pago:true,forma:'Recorrente',formaId:'fp_pixc6',contaId:'ct_c6',data:inicio});
+ const regAs={id:novoId('f'),tipo:'receita',desc:'Assinatura — '+pl.nome+' ('+cliente.nome+')',cat:'Planos',valor:pl.preco,venc:inicio,pago:true,forma:'Recorrente',formaId:'fp_pixc6',contaId:'ct_c6',data:inicio};db.financeiro.push(regAs);persistirFinanceiro(regAs);
  save();closeModal();toast('Assinatura ativada ✓');renderPlanos();
 }
 function abrirAssinatura(id){
@@ -2408,7 +2451,7 @@ function abrirAssinatura(id){
  openModal({title:'Gerenciar assinatura',body,size:'wide',foot:`<button class="btn btn-ghost" onclick="closeModal()">Fechar</button>`});
 }
 function usarSaldo(id){const a=db.assinaturas.find(x=>x.id===id);if(a.saldo<=0)return;a.saldo--;a.historico.push({data:todayISO(),txt:'Serviço utilizado (saldo → '+a.saldo+')'});save();toast('Saldo atualizado: '+a.saldo+' restante(s)');abrirAssinatura(id);}
-function cobrarAssinatura(id){const a=db.assinaturas.find(x=>x.id===id);const pl=planoOf(a.planoId);const c=cli(a.clienteId);const d=parseISO(a.proxCobranca);a.proxCobranca=fmtDate(new Date(d.getFullYear(),d.getMonth()+1,d.getDate()));a.saldo=pl.qtdServicos;a.historico.push({data:todayISO(),txt:'Cobrança registrada ('+BRL(pl.preco)+') · saldo renovado'});db.financeiro.push({id:uid('f'),tipo:'receita',desc:'Assinatura — '+pl.nome+' ('+c.nome+')',cat:'Planos',valor:pl.preco,venc:todayISO(),pago:true,forma:'Recorrente',formaId:'fp_pixc6',contaId:'ct_c6',data:todayISO()});save();toast('Cobrança registrada ✓');abrirAssinatura(id);}
+function cobrarAssinatura(id){const a=db.assinaturas.find(x=>x.id===id);const pl=planoOf(a.planoId);const c=cli(a.clienteId);const d=parseISO(a.proxCobranca);a.proxCobranca=fmtDate(new Date(d.getFullYear(),d.getMonth()+1,d.getDate()));a.saldo=pl.qtdServicos;a.historico.push({data:todayISO(),txt:'Cobrança registrada ('+BRL(pl.preco)+') · saldo renovado'});const regCb={id:novoId('f'),tipo:'receita',desc:'Assinatura — '+pl.nome+' ('+c.nome+')',cat:'Planos',valor:pl.preco,venc:todayISO(),pago:true,forma:'Recorrente',formaId:'fp_pixc6',contaId:'ct_c6',data:todayISO()};db.financeiro.push(regCb);persistirFinanceiro(regCb);save();toast('Cobrança registrada ✓');abrirAssinatura(id);}
 function pausarAssinatura(id){const a=db.assinaturas.find(x=>x.id===id);a.status='pausado';a.historico.push({data:todayISO(),txt:'Assinatura pausada'});save();abrirAssinatura(id);renderNav();}
 function reativarAssinatura(id){const a=db.assinaturas.find(x=>x.id===id);a.status='ativo';a.historico.push({data:todayISO(),txt:'Assinatura reativada'});save();abrirAssinatura(id);renderNav();}
 function cancelarAssinatura(id){if(!confirm('Cancelar esta assinatura?'))return;const a=db.assinaturas.find(x=>x.id===id);a.status='cancelado';a.historico.push({data:todayISO(),txt:'Assinatura cancelada'});save();abrirAssinatura(id);renderNav();}
@@ -2831,13 +2874,13 @@ function novaConta(id){
 function salvarConta(id){
  const nome=$('#ctNome').value.trim();if(!nome){toast('Informe o nome','err');return;}
  const dados={nome,tipo:$('#ctTipo').value,saldoInicial:parseFloat($('#ctSaldo').value)||0};
- if(id)Object.assign(contaOf(id),dados);else db.contas.push({id:uid('ct'),...dados});
- save();closeModal();toast('Conta salva ✓');(curView==='config'?renderConfig():renderFinanceiro());
+ let ctRef;if(id){ctRef=contaOf(id);Object.assign(ctRef,dados);}else{ctRef={id:uid('ct'),...dados};db.contas.push(ctRef);}
+ save();persistirConta(ctRef);closeModal();toast('Conta salva ✓');(curView==='config'?renderConfig():renderFinanceiro());
 }
 function excluirConta(id){
  if((db.formasPag||[]).some(f=>f.contaId===id)){toast('Há formas usando esta conta. Edite-as antes.','err');return;}
  if(!confirm('Excluir esta conta?'))return;
- db.contas=db.contas.filter(c=>c.id!==id);save();closeModal();toast('Conta excluída');(curView==='config'?renderConfig():renderFinanceiro());
+ db.contas=db.contas.filter(c=>c.id!==id);save();removerConta(id);closeModal();toast('Conta excluída');(curView==='config'?renderConfig():renderFinanceiro());
 }
 function novaForma(id){
  const f=id?formaOf(id):null;const tipo=f?f.tipo:'pix';const maxP=f&&f.maxParcelas?f.maxParcelas:12;
@@ -2861,11 +2904,11 @@ function salvarForma(id){
  const tipo=$('#fpTipo').value;
  const dados={nome,tipo,contaId:$('#fpConta').value,taxa:parseFloat($('#fpTaxa').value)||0,prazoDias:parseInt($('#fpPrazo').value)||0,ativo:true};
  if(tipo==='credito'){dados.maxParcelas=Math.min(12,Math.max(1,parseInt($('#fpMaxParc').value)||12));dados.taxasParcelas=$$('#fpGrid input[data-parc]').map(i=>parseFloat(i.value)||0);}
- if(id)Object.assign(formaOf(id),dados);else db.formasPag.push({id:uid('fp'),...dados});
- save();closeModal();toast('Forma salva ✓');(curView==='config'?renderConfig():renderFinanceiro());
+ let fpRef;if(id){fpRef=formaOf(id);Object.assign(fpRef,dados);}else{fpRef={id:uid('fp'),...dados};db.formasPag.push(fpRef);}
+ save();persistirForma(fpRef);closeModal();toast('Forma salva ✓');(curView==='config'?renderConfig():renderFinanceiro());
 }
-function excluirForma(id){if(!confirm('Excluir esta forma de recebimento?'))return;db.formasPag=db.formasPag.filter(f=>f.id!==id);save();toast('Forma excluída');(curView==='config'?renderConfig():renderFinanceiro());}
-function receberRecebivel(id){const f=db.financeiro.find(x=>x.id===id);if(!f)return;f.liberacao=todayISO();save();toast('Recebível liberado na conta ✓');(curView==='config'?renderConfig():renderFinanceiro());}
+function excluirForma(id){if(!confirm('Excluir esta forma de recebimento?'))return;db.formasPag=db.formasPag.filter(f=>f.id!==id);save();removerForma(id);toast('Forma excluída');(curView==='config'?renderConfig():renderFinanceiro());}
+function receberRecebivel(id){const f=db.financeiro.find(x=>x.id===id);if(!f)return;f.liberacao=todayISO();save();persistirFinanceiro(f);toast('Recebível liberado na conta ✓');(curView==='config'?renderConfig():renderFinanceiro());}
 
 </script>
 </body>
