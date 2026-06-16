@@ -239,6 +239,7 @@ textarea.inp{resize:vertical;min-height:78px;line-height:1.55}
 <div id="app"></div>
 <div class="toasts" id="toasts"></div>
 <div id="modalRoot"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 /* ============================================================
    VETÓRIA — Sistema de Gestão Veterinária (single-file)
@@ -297,7 +298,9 @@ const ICON={
  truck:'<path d="M1 3h15v13H1zM16 8h4l3 3v5h-7M5.5 18.5a2 2 0 1 0 0 .01M18.5 18.5a2 2 0 1 0 0 .01"/>',
  activity:'<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
  shield:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>',
- send:'<path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/>'
+ send:'<path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/>',
+ tag:'<path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><circle cx="7" cy="7" r="1.2"/>',
+ upload:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>'
 };
 function ic(name,size){const s=size||20;return `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[name]||''}</svg>`;}
 
@@ -324,6 +327,12 @@ function toast(msg,type='ok'){const t=el('div','toast '+type);const i={ok:'check
 
 /* ---------------- Persistência ---------------- */
 const SK='vetoria_v2';
+/* ---------------- Supabase ---------------- */
+const SUPA_URL='https://nrntinlwmsxxugmxxoud.supabase.co';
+const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ybnRpbmx3bXN4eHVnbXh4b3VkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1OTIwNDEsImV4cCI6MjA5NzE2ODA0MX0.AkZZUbomQQp3idmlzSflngFdwUiI-kD7Kr_EzwISX_w';
+let sb=null; try{ if(typeof window!=='undefined'&&window.supabase&&SUPA_URL&&SUPA_KEY){ sb=window.supabase.createClient(SUPA_URL,SUPA_KEY,{auth:{persistSession:true,autoRefreshToken:true}}); } }catch(e){ console.warn('Supabase init falhou:',e); }
+let modoDemo=false, clinicaAtual=null, membroAtual=null;
+function supaOn(){return !!sb && !modoDemo;}
 function save(){try{localStorage.setItem(SK,JSON.stringify(db));}catch(e){}}
 function load(){try{const r=localStorage.getItem(SK);if(r)return JSON.parse(r);}catch(e){}return null;}
 
@@ -346,6 +355,23 @@ const TIPO_AG={
  cirurgia:{lbl:'Cirurgia',ic:'stethoscope',cor:'var(--danger)'}
 };
 const PAGAMENTOS=['Dinheiro','Pix','Cartão Débito','Cartão Crédito','Crediário'];
+const CONTAS_PADRAO=[
+ {id:'ct_caixa',nome:'Caixa (dinheiro)',tipo:'caixa',saldoInicial:300},
+ {id:'ct_c6',nome:'C6 Bank',tipo:'banco',saldoInicial:25000},
+ {id:'ct_stone',nome:'Stone',tipo:'maquininha',saldoInicial:0},
+ {id:'ct_infinite',nome:'InfinitePay',tipo:'maquininha',saldoInicial:0}
+];
+const FORMAS_PADRAO=[
+ {id:'fp_din',nome:'Dinheiro',tipo:'dinheiro',contaId:'ct_caixa',taxa:0,prazoDias:0,ativo:true},
+ {id:'fp_pixc6',nome:'Pix C6 Bank',tipo:'pix',contaId:'ct_c6',taxa:0,prazoDias:0,ativo:true},
+ {id:'fp_pixstone',nome:'Pix Stone',tipo:'pix',contaId:'ct_stone',taxa:0,prazoDias:0,ativo:true},
+ {id:'fp_creditostone',nome:'Maquininha Stone (Crédito)',tipo:'credito',contaId:'ct_stone',taxa:3.19,prazoDias:30,maxParcelas:12,taxaIncremento:0.79,ativo:true},
+ {id:'fp_debitostone',nome:'Maquininha Stone (Débito)',tipo:'debito',contaId:'ct_stone',taxa:1.49,prazoDias:1,ativo:true},
+ {id:'fp_infinite',nome:'Maquininha InfinitePay',tipo:'credito',contaId:'ct_infinite',taxa:3.15,prazoDias:1,maxParcelas:12,taxaIncremento:0.95,ativo:true},
+ {id:'fp_cheque',nome:'Cheque',tipo:'cheque',contaId:'ct_caixa',taxa:0,prazoDias:0,ativo:true}
+];
+const TIPO_FORMA={dinheiro:{lbl:'Dinheiro',ic:'money'},pix:{lbl:'Pix',ic:'money'},debito:{lbl:'Cartão Débito',ic:'pdv'},credito:{lbl:'Cartão Crédito',ic:'pdv'},cheque:{lbl:'Cheque',ic:'doc'},transferencia:{lbl:'Transferência',ic:'repeat'}};
+const TIPO_CONTA={caixa:{lbl:'Caixa',ic:'money'},banco:{lbl:'Conta bancária',ic:'building'},maquininha:{lbl:'Maquininha',ic:'pdv'},carteira:{lbl:'Carteira digital',ic:'money'}};
 const CAT_DESP=['Fornecedores','Folha de pagamento','Aluguel','Energia/Água','Marketing','Impostos','Equipamentos','Outros'];
 const TIPO_DOC={
  receita:{lbl:'Receita simples',ic:'receita',cor:'var(--brand)'},
@@ -486,20 +512,20 @@ function seed(){
  ];
  // vendas
  const vendas=[
-  {id:uid('vd'),data:dia(D),clienteId:'c1',profId:'f1',itens:[{nome:'Consulta clínica',qtd:1,unit:90},{nome:'Bravecto Cães',qtd:1,unit:129.9}],pagamentos:[{forma:'Pix',valor:219.9}],total:219.9,status:'pago'},
-  {id:uid('vd'),data:dia(D),clienteId:'c5',profId:'f4',itens:[{nome:'Banho Porte P',qtd:1,unit:45},{nome:'Petisco Bifinho',qtd:2,unit:24.9}],pagamentos:[{forma:'Cartão Crédito',valor:94.8}],total:94.8,status:'pago'},
+  {id:uid('vd'),data:dia(D),clienteId:'c1',profId:'f1',itens:[{nome:'Consulta clínica',qtd:1,unit:90},{nome:'Bravecto Cães',qtd:1,unit:129.9}],pagamentos:[{forma:'Pix C6 Bank',valor:219.9}],total:219.9,status:'pago'},
+  {id:uid('vd'),data:dia(D),clienteId:'c5',profId:'f4',itens:[{nome:'Banho Porte P',qtd:1,unit:45},{nome:'Petisco Bifinho',qtd:2,unit:24.9}],pagamentos:[{forma:'Maquininha Stone (Crédito)',valor:94.8}],total:94.8,status:'pago'},
   {id:uid('vd'),data:dia(D-1<1?1:D-1),clienteId:'c8',profId:'f3',itens:[{nome:'Tosa Completa',qtd:1,unit:90}],pagamentos:[{forma:'Dinheiro',valor:90}],total:90,status:'pago'}
  ];
  // histórico antigo (para análise de retenção / inativos)
  const ago=n=>fmtDate(new Date(Date.now()-n*864e5));
  vendas.push(
-  {id:uid('vd'),data:ago(168),clienteId:'c9',profId:'f1',itens:[{nome:'Cirurgia — castração',qtd:1,unit:650}],pagamentos:[{forma:'Cartão Crédito',valor:650}],total:650,status:'pago'},
-  {id:uid('vd'),data:ago(175),clienteId:'c9',profId:'f1',itens:[{nome:'Consulta + exames pré-op',qtd:1,unit:330}],pagamentos:[{forma:'Pix',valor:330}],total:330,status:'pago'},
-  {id:uid('vd'),data:ago(78),clienteId:'c10',profId:'f2',itens:[{nome:'Consulta clínica',qtd:1,unit:90},{nome:'Vermífugo',qtd:1,unit:45}],pagamentos:[{forma:'Pix',valor:135}],total:135,status:'pago'},
+  {id:uid('vd'),data:ago(168),clienteId:'c9',profId:'f1',itens:[{nome:'Cirurgia — castração',qtd:1,unit:650}],pagamentos:[{forma:'Maquininha Stone (Crédito)',valor:650}],total:650,status:'pago'},
+  {id:uid('vd'),data:ago(175),clienteId:'c9',profId:'f1',itens:[{nome:'Consulta + exames pré-op',qtd:1,unit:330}],pagamentos:[{forma:'Pix C6 Bank',valor:330}],total:330,status:'pago'},
+  {id:uid('vd'),data:ago(78),clienteId:'c10',profId:'f2',itens:[{nome:'Consulta clínica',qtd:1,unit:90},{nome:'Vermífugo',qtd:1,unit:45}],pagamentos:[{forma:'Pix C6 Bank',valor:135}],total:135,status:'pago'},
   {id:uid('vd'),data:ago(96),clienteId:'c10',profId:'f4',itens:[{nome:'Banho Porte P',qtd:1,unit:45}],pagamentos:[{forma:'Dinheiro',valor:45}],total:45,status:'pago'},
-  {id:uid('vd'),data:ago(124),clienteId:'c11',profId:'f1',itens:[{nome:'Consulta especializada',qtd:1,unit:180},{nome:'Ração terapêutica',qtd:2,unit:140}],pagamentos:[{forma:'Cartão Crédito',valor:460}],total:460,status:'pago'},
-  {id:uid('vd'),data:ago(150),clienteId:'c11',profId:'f1',itens:[{nome:'Hemograma + bioquímico',qtd:1,unit:155}],pagamentos:[{forma:'Pix',valor:155}],total:155,status:'pago'},
-  {id:uid('vd'),data:ago(52),clienteId:'c12',profId:'f3',itens:[{nome:'Banho & tosa higiênica',qtd:1,unit:75}],pagamentos:[{forma:'Pix',valor:75}],total:75,status:'pago'}
+  {id:uid('vd'),data:ago(124),clienteId:'c11',profId:'f1',itens:[{nome:'Consulta especializada',qtd:1,unit:180},{nome:'Ração terapêutica',qtd:2,unit:140}],pagamentos:[{forma:'Maquininha Stone (Crédito)',valor:460}],total:460,status:'pago'},
+  {id:uid('vd'),data:ago(150),clienteId:'c11',profId:'f1',itens:[{nome:'Hemograma + bioquímico',qtd:1,unit:155}],pagamentos:[{forma:'Pix Stone',valor:155}],total:155,status:'pago'},
+  {id:uid('vd'),data:ago(52),clienteId:'c12',profId:'f3',itens:[{nome:'Banho & tosa higiênica',qtd:1,unit:75}],pagamentos:[{forma:'Pix C6 Bank',valor:75}],total:75,status:'pago'}
  );
  // financeiro
  const fin=[];
@@ -516,9 +542,8 @@ function seed(){
  FR('receita','Plano de saúde pet (recorrência)','Serviços',890,dia(D+5),false,'');
  // caixa
  const caixa={aberto:true,abertura:dia(D)+' 08:00',valorInicial:200,operador:'Júlia Recepção',movimentos:[
-  {h:'08:32',tipo:'entrada',desc:'Venda #'+vendas[0].id,valor:219.9,forma:'Pix'},
-  {h:'09:15',tipo:'entrada',desc:'Venda #'+vendas[1].id,valor:94.8,forma:'Cartão Crédito'},
-  {h:'10:40',tipo:'sangria',desc:'Sangria para depósito',valor:-150,forma:'Dinheiro'}
+  {h:'10:40',tipo:'entrada',desc:'Venda em dinheiro',valor:90,forma:'Dinheiro',formaId:'fp_din'},
+  {h:'14:20',tipo:'sangria',desc:'Sangria para depósito',valor:-150,forma:'Dinheiro',formaId:'fp_din'}
  ]};
  // ---- Banho & Tosa: etapas, checklist e transporte ----
  const CHECK_BANHO=['Limpeza de ouvidos','Corte de unhas','Hidratação','Perfume','Lacinho/gravata'];
@@ -552,11 +577,31 @@ function seed(){
  return {seq:db?db.seq:1000,empresa:{nome:'Clínica Vetória',cnpj:'12.345.678/0001-90',tel:'(79) 3214-5678',end:'Av. Ministro Geraldo Barreto Sobral, 215 — Aracaju/SE',email:'contato@vetoria.com'},
    usuarios,profissionais:prof,clientes,produtos,agendamentos:ag,internacoes,vendas,financeiro:fin,caixa,
    documentos,orcamentos,planos,assinaturas,
+   contas:CONTAS_PADRAO.map(c=>({...c})),formasPag:FORMAS_PADRAO.map(f=>({...f})),
    config:{abreCaixaObrigatorio:true,metaMensal:48000}};
 }
 
 let db=load();
 if(!db){db={seq:1000};db=seed();save();}
+migrarContas();
+function formaOf(id){return (db.formasPag||[]).find(f=>f.id===id);}
+function contaOf(id){return (db.contas||[]).find(c=>c.id===id);}
+function taxaParcela(fp,n){n=n||1;if(!fp)return 0;if(fp.taxasParcelas&&fp.taxasParcelas[n-1]!=null)return fp.taxasParcelas[n-1];const base=fp.taxa||0;if(n<=1)return base;return +(base+(n-1)*(fp.taxaIncremento!=null?fp.taxaIncremento:0.8)).toFixed(2);}
+function formaPorNome(nome){if(!nome)return null;const f=(db.formasPag||[]).find(x=>x.nome===nome);if(f)return f;const n=nome.toLowerCase();if(n.includes('dinheiro'))return formaOf('fp_din');if(n.includes('débito')||n.includes('debito'))return formaOf('fp_debitostone');if(n.includes('crédito')||n.includes('credito')||n.includes('cartão')||n.includes('cartao'))return formaOf('fp_creditostone');if(n.includes('pix'))return formaOf('fp_pixc6');if(n.includes('cheque'))return formaOf('fp_cheque');return null;}
+function migrarContas(){
+ let mudou=false;
+ if(!db.contas){db.contas=CONTAS_PADRAO.map(c=>({...c}));mudou=true;}
+ if(!db.formasPag){db.formasPag=FORMAS_PADRAO.map(f=>({...f}));mudou=true;}
+ (db.formasPag||[]).forEach(f=>{if(f.tipo==='credito'&&f.maxParcelas==null){f.maxParcelas=12;if(f.taxaIncremento==null)f.taxaIncremento=0.8;mudou=true;}});
+ (db.financeiro||[]).forEach(f=>{
+   if(f.contaId)return;
+   const fp=formaOf(f.formaId)||formaPorNome(f.forma);
+   if(fp){f.formaId=fp.id;f.contaId=fp.contaId;f.taxa=fp.taxa;f.liquido=f.tipo==='receita'?+(f.valor*(1-fp.taxa/100)).toFixed(2):f.valor;f.liberacao=fp.prazoDias&&f.data?fmtDate(new Date(parseISO(f.data).getTime()+fp.prazoDias*864e5)):f.data;}
+   else{f.contaId='ct_c6';f.liquido=f.valor;}
+   mudou=true;
+ });
+ if(mudou)save();
+}
 
 /* ---------------- Lookups ---------------- */
 const cli=id=>db.clientes.find(c=>c.id===id);
@@ -586,6 +631,7 @@ const NAV=[
  {g:'Comercial',items:[
    {id:'pdv',lb:'Vendas / PDV',ic:'pdv'},
    {id:'orcamentos',lb:'Orçamentos',ic:'orcamento'},
+   {id:'catalogo',lb:'Catálogo',ic:'tag'},
    {id:'estoque',lb:'Estoque',ic:'estoque'},
    {id:'financeiro',lb:'Financeiro',ic:'financeiro'},
    {id:'planos',lb:'Planos & Assinaturas',ic:'repeat'},
@@ -662,7 +708,7 @@ function renderNav(){
 function toggleSidebar(open){$('#sidebar').classList.toggle('open',open);$('#scrim').classList.toggle('hide',!open);}
 function go(view){curView=view;renderNav();toggleSidebar(false);window.scrollTo(0,0);renderView();}
 function renderView(){
- const map={dash:renderDash,agenda:renderAgenda,clientes:renderClientes,prontuario:renderProntuario,documentos:renderDocumentos,internacao:renderInternacao,vacinas:renderVacinas,estetica:renderEstetica,pdv:renderPDV,orcamentos:renderOrcamentos,estoque:renderEstoque,financeiro:renderFinanceiro,planos:renderPlanos,mensagens:renderMensagens,retencao:renderRetencao,relatorios:renderRelatorios,config:renderConfig};
+ const map={dash:renderDash,agenda:renderAgenda,clientes:renderClientes,prontuario:renderProntuario,documentos:renderDocumentos,internacao:renderInternacao,vacinas:renderVacinas,estetica:renderEstetica,pdv:renderPDV,orcamentos:renderOrcamentos,catalogo:renderCatalogo,estoque:renderEstoque,financeiro:renderFinanceiro,planos:renderPlanos,mensagens:renderMensagens,retencao:renderRetencao,relatorios:renderRelatorios,config:renderConfig};
  (map[curView]||renderDash)();
 }
 
@@ -948,7 +994,7 @@ function renderClientes(){
  let list=db.clientes.filter(c=>!q||c.nome.toLowerCase().includes(q)||c.tel.includes(q)||c.pets.some(p=>p.nome.toLowerCase().includes(q)));
  list=list.slice().sort((a,b)=>a.nome.localeCompare(b.nome));
  $('#content').innerHTML=`
- ${phead('Clientes & Pets',db.clientes.length+' tutores · '+allPets().length+' pets cadastrados','<button class="btn btn-primary" onclick="openNovoCliente()">'+ic('plus',15)+' Novo cliente</button>')}
+ ${phead('Clientes & Pets',db.clientes.length+' tutores · '+allPets().length+' pets cadastrados','<button class="btn btn-soft" onclick="openImportarClientes()">'+ic('upload',15)+' Importar Excel/CSV</button><button class="btn btn-primary" onclick="openNovoCliente()">'+ic('plus',15)+' Novo cliente</button>')}
  <div class="card" style="margin-bottom:18px"><div class="card-pad" style="padding:14px 16px"><div class="search" style="max-width:none">${ic('search')}<input id="cliBusca" value="${cliBusca}" placeholder="Buscar por tutor, telefone ou pet…"></div></div></div>
  <div class="card"><div class="tbl-wrap"><table class="tbl">
    <thead><tr><th>Tutor</th><th>Contato</th><th>Pets</th><th>Cadastro</th><th></th></tr></thead>
@@ -976,8 +1022,9 @@ function openNovoCliente(){
 }
 function salvarCliente(){
  const nome=$('#clNome').value.trim();if(!nome){toast('Informe o nome','err');return;}
- db.clientes.push({id:uid('c'),nome,tel:$('#clTel').value,cpf:$('#clCpf').value,email:$('#clEmail').value,nasc:$('#clNasc').value,end:$('#clEnd').value,obs:$('#clObs').value,criado:todayISO(),pets:[]});
- save();closeModal();toast('Cliente cadastrado ✓');renderClientes();
+ const novo={id:novoId('c'),nome,tel:$('#clTel').value,cpf:$('#clCpf').value,email:$('#clEmail').value,nasc:$('#clNasc').value,end:$('#clEnd').value,obs:$('#clObs').value,criado:todayISO(),origem:'manual',pets:[]};
+ db.clientes.push(novo);
+ save();persistirCliente(novo);closeModal();toast('Cliente cadastrado ✓');renderClientes();
 }
 function abrirCliente(id){
  const c=cli(id);if(!c)return;
@@ -1006,8 +1053,8 @@ function abrirCliente(id){
  openModal({title:'Ficha do cliente',body,size:'wide',foot:`<button class="btn btn-ghost" style="margin-right:auto;color:var(--danger)" onclick="excluirCliente('${id}')">${ic('trash',14)} Excluir</button><button class="btn btn-ghost" onclick="editarCliente('${id}')">${ic('edit',14)} Editar</button><button class="btn btn-primary" onclick="closeModal();openNovoAgend({petId:'${c.pets[0]?c.pets[0].id:''}'})">${ic('agenda',14)} Agendar</button>`});
 }
 function editarCliente(id){closeModal();const c=cli(id);openNovoCliente();setTimeout(()=>{$('#clNome').value=c.nome;$('#clTel').value=c.tel;$('#clCpf').value=c.cpf;$('#clEmail').value=c.email;$('#clNasc').value=c.nasc||'';$('#clEnd').value=c.end;$('#clObs').value=c.obs;$('.mhead h3').textContent='Editar cliente';$('.mfoot .btn-primary').setAttribute('onclick',`salvarEdicaoCliente('${id}')`);},30);}
-function salvarEdicaoCliente(id){const c=cli(id);c.nome=$('#clNome').value.trim();c.tel=$('#clTel').value;c.cpf=$('#clCpf').value;c.email=$('#clEmail').value;c.nasc=$('#clNasc').value;c.end=$('#clEnd').value;c.obs=$('#clObs').value;save();closeModal();toast('Cliente atualizado ✓');renderClientes();}
-function excluirCliente(id){const c=cli(id);if(!confirm('Excluir '+c.nome+' e todos os seus pets?'))return;db.clientes=db.clientes.filter(x=>x.id!==id);save();closeModal();toast('Cliente excluído');renderClientes();}
+function salvarEdicaoCliente(id){const c=cli(id);c.nome=$('#clNome').value.trim();c.tel=$('#clTel').value;c.cpf=$('#clCpf').value;c.email=$('#clEmail').value;c.nasc=$('#clNasc').value;c.end=$('#clEnd').value;c.obs=$('#clObs').value;save();persistirCliente(c);closeModal();toast('Cliente atualizado ✓');renderClientes();}
+function excluirCliente(id){const c=cli(id);if(!confirm('Excluir '+c.nome+' e todos os seus pets?'))return;db.clientes=db.clientes.filter(x=>x.id!==id);save();removerCliente(id);closeModal();toast('Cliente excluído');renderClientes();}
 
 function openNovoPet(cliId){
  const body=`
@@ -1024,8 +1071,9 @@ function openNovoPet(cliId){
 }
 function salvarPet(cliId){
  const c=cli(cliId);const nome=$('#ptNome').value.trim();if(!nome){toast('Informe o nome','err');return;}
- c.pets.push({id:uid('p'),nome,especie:$('#ptEsp').value,raca:$('#ptRaca').value,sexo:$('#ptSexo').value,porte:$('#ptPorte').value,nasc:$('#ptNasc').value,peso:parseFloat($('#ptPeso').value)||0,cor:$('#ptCor').value,obs:$('#ptObs').value,alergias:'',vacinas:[],prontuario:[]});
- save();closeModal();toast('Pet cadastrado ✓');abrirCliente(cliId);
+ const novo={id:novoId('p'),nome,especie:$('#ptEsp').value,raca:$('#ptRaca').value,sexo:$('#ptSexo').value,porte:$('#ptPorte').value,nasc:$('#ptNasc').value,peso:parseFloat($('#ptPeso').value)||0,cor:$('#ptCor').value,obs:$('#ptObs').value,alergias:'',vacinas:[],prontuario:[]};
+ c.pets.push(novo);
+ save();persistirPet(novo,cliId);closeModal();toast('Pet cadastrado ✓');abrirCliente(cliId);
 }
 
 let petTab='resumo';
@@ -1288,7 +1336,8 @@ function renderPDV(){
      <div class="card-pad" style="padding:14px 16px;border-bottom:1px solid var(--line-2)"><div class="search" style="max-width:none">${ic('search')}<input id="pdvBusca" value="${pdvBusca}" placeholder="Buscar produto ou serviço… (nome ou código)"></div></div>
      <div class="card-pad" id="pdvGrid"></div>
    </div>
-   <div class="card" style="position:sticky;top:78px">
+   <div class="flex-col" style="gap:16px;position:sticky;top:78px">
+   <div class="card">
      <div class="card-head"><h3>${ic('cart',17)} Comanda</h3><div class="sp"></div><button class="btn btn-ghost btn-sm" onclick="carrinho=[];renderCarrinho()" ${carrinho.length?'':'disabled'}>Limpar</button></div>
      <div class="card-pad">
        <div class="frow" style="margin-bottom:8px">
@@ -1297,6 +1346,8 @@ function renderPDV(){
        </div>
        <div id="cartItems"></div>
      </div>
+   </div>
+   ${caixaPainelHTML()}
    </div>
  </div>`;
  $('#pdvCli').addEventListener('change',e=>pdvCliente=e.target.value);
@@ -1332,32 +1383,66 @@ function renderCarrinho(){
      <button class="btn btn-accent" style="width:100%" onclick="abrirPagamento()">${ic('money',16)} Finalizar venda</button>`
    :emptyState('cart','Comanda vazia','Toque nos produtos para adicionar.')}`;
 }
+let pgSub=0;
 function abrirPagamento(){
  if(!carrinho.length)return;
- const total=carrinho.reduce((s,i)=>s+i.unit*i.qtd,0);
- const body=`<div style="text-align:center;padding:6px 0 16px"><div class="t-sub">Total a receber</div><div style="font-family:'Plus Jakarta Sans';font-size:34px;font-weight:800;color:var(--brand)">${BRL(total)}</div></div>
-   <div class="field"><label>Forma de pagamento</label><div class="chiprow" id="pgFormas" style="margin:0">${PAGAMENTOS.map((f,i)=>`<button class="chip${i===0?' active':''}" data-f="${f}" onclick="$$('#pgFormas .chip').forEach(c=>c.classList.remove('active'));this.classList.add('active')">${f}</button>`).join('')}</div></div>
-   <div class="field"><label>Valor recebido</label><input class="inp" id="pgRecebido" value="${total.toFixed(2).replace('.',',')}" oninput="pgTroco(${total})"></div>
-   <div id="pgTrocoBox" class="t-sub" style="text-align:right"></div>`;
- openModal({title:'Pagamento',body,foot:`<button class="btn btn-ghost" onclick="closeModal()">Voltar</button><button class="btn btn-primary" onclick="finalizarVenda(${total})">${ic('check',15)} Confirmar recebimento</button>`});
+ pgSub=carrinho.reduce((s,i)=>s+i.unit*i.qtd,0);
+ const body=`<div id="pgResumo" style="text-align:center;padding:6px 0 14px"></div>
+   <div class="field"><label>Desconto ${ic('shield',12)} <span class="t-sub">(autorizado pelo gerente)</span></label>
+     <div class="flex" style="gap:8px"><input class="inp" id="pgDesc" value="0" style="flex:1" oninput="pgRecalc()">
+       <select class="sel" id="pgDescTipo" style="width:80px" onchange="pgRecalc()"><option value="rs">R$</option><option value="pct">%</option></select>
+       <select class="sel" id="pgAutoriz" style="flex:1"><option value="">Quem autorizou…</option>${db.profissionais.map(p=>`<option value="${p.id}">${p.nome}</option>`).join('')}</select></div></div>
+   <div class="field"><label>Forma de recebimento</label><div class="chiprow" id="pgFormas" style="margin:0">${(db.formasPag||[]).filter(f=>f.ativo!==false).map((f,i)=>`<button class="chip${i===0?' active':''}" data-f="${f.id}" onclick="pgSetForma('${f.id}')">${ic(TIPO_FORMA[f.tipo]?TIPO_FORMA[f.tipo].ic:'money',13)} ${f.nome}</button>`).join('')}</div></div>
+   <div class="field" id="pgParcWrap" style="display:none"><label>Parcelas</label><select class="sel" id="pgParcelas" onchange="pgRecalc()"></select></div>
+   <div class="field" id="pgRecebWrap"><label>Valor recebido</label><input class="inp" id="pgRecebido" value="${pgSub.toFixed(2).replace('.',',')}" oninput="pgRecalc()"><div id="pgTrocoBox" class="t-sub" style="text-align:right;margin-top:4px"></div></div>`;
+ openModal({title:'Pagamento',body,foot:`<button class="btn btn-ghost" onclick="closeModal()">Voltar</button><button class="btn btn-primary" onclick="finalizarVenda()">${ic('check',15)} Confirmar recebimento</button>`});
+ pgSetForma((db.formasPag.filter(f=>f.ativo!==false)[0]||{}).id);
 }
-function pgTroco(total){const r=parseFloat(($('#pgRecebido').value||'0').replace(/[^\d,]/g,'').replace(',','.'))||0;const t=r-total;$('#pgTrocoBox').innerHTML=t>0?`Troco: <b style="color:var(--ink)">${BRL(t)}</b>`:'';}
-function finalizarVenda(total){
- const forma=$('#pgFormas .chip.active').dataset.f;
- const vend=$('#pdvVend').value;
- const venda={id:uid('vd'),data:todayISO(),clienteId:pdvCliente||null,profId:vend,itens:carrinho.map(i=>({nome:i.nome,qtd:i.qtd,unit:i.unit})),pagamentos:[{forma,valor:total}],total,status:'pago'};
+function pgSetForma(id){$$('#pgFormas .chip').forEach(c=>c.classList.toggle('active',c.dataset.f===id));pgRecalc(true);}
+function pgCalcAtual(){
+ const fp=formaOf(($('#pgFormas .chip.active')||{}).dataset?.f)||db.formasPag[0];
+ const descTipo=$('#pgDescTipo')?$('#pgDescTipo').value:'rs';
+ let desc=parseFloat(($('#pgDesc')?$('#pgDesc').value:'0').replace(',','.'))||0;
+ let descValor=descTipo==='pct'?pgSub*desc/100:desc;descValor=Math.max(0,Math.min(descValor,pgSub));
+ const total=+(pgSub-descValor).toFixed(2);
+ let n=1;if(fp.tipo==='credito'){n=parseInt($('#pgParcelas')&&$('#pgParcelas').value)||1;}
+ const taxa=taxaParcela(fp,n);const liquido=+(total*(1-taxa/100)).toFixed(2);
+ return {fp,descValor,total,n,taxa,liquido};
+}
+function pgRecalc(rebuild){
+ if(!$('#pgResumo'))return;
+ const c=pgCalcAtual();const fp=c.fp;
+ if(fp.tipo==='credito'){$('#pgParcWrap').style.display='';if(rebuild){const max=fp.maxParcelas||12;$('#pgParcelas').innerHTML=Array.from({length:max},(_,i)=>i+1).map(k=>`<option value="${k}">${k}x — taxa ${taxaParcela(fp,k)}%</option>`).join('');}}
+ else{$('#pgParcWrap').style.display='none';}
+ const isDin=fp.tipo==='dinheiro';$('#pgRecebWrap').style.display=isDin?'':'none';
+ if(isDin){const r=parseFloat(($('#pgRecebido').value||'0').replace(/[^\d,.-]/g,'').replace(',','.'))||0;const tr=r-c.total;$('#pgTrocoBox').innerHTML=tr>0?`Troco: <b style="color:var(--ink)">${BRL(tr)}</b>`:'';}
+ const parcLine=c.n>1?`<div class="t-sub" style="margin-top:4px">${c.n}× de <b>${BRL(c.total/c.n)}</b> · 1ª libera em ${ddmm(fmtDate(new Date(Date.now()+(fp.prazoDias||0)*864e5)))}</div>`:'';
+ const taxaLine=c.taxa?`<div class="t-sub" style="margin-top:4px">Taxa ${c.taxa}% · líquido <b style="color:var(--ok)">${BRL(c.liquido)}</b> em ${contaOf(fp.contaId)?contaOf(fp.contaId).nome:''}</div>`:`<div class="t-sub" style="margin-top:4px">Cai em ${contaOf(fp.contaId)?contaOf(fp.contaId).nome:''}</div>`;
+ $('#pgResumo').innerHTML=`<div class="t-sub">Total a receber</div><div style="font-family:'Plus Jakarta Sans';font-size:32px;font-weight:800;color:var(--brand)">${BRL(c.total)}</div>${c.descValor>0?`<div class="t-sub" style="color:var(--accent-600)">desconto de ${BRL(c.descValor)} aplicado</div>`:''}${taxaLine}${parcLine}`;
+}
+function finalizarVenda(){
+ const c=pgCalcAtual();const fp=c.fp,n=c.n,total=c.total;
+ if(total<=0){toast('Total inválido','err');return;}
+ const autorizadoPor=$('#pgAutoriz')?$('#pgAutoriz').value:'';
+ if(c.descValor>0&&!autorizadoPor){toast('Informe quem autorizou o desconto','err');return;}
+ const vend=$('#pdvVend').value;const cliNome=pdvCliente?cli(pdvCliente).nome:'Consumidor';
+ const venda={id:uid('vd'),data:todayISO(),clienteId:pdvCliente||null,profId:vend,itens:carrinho.map(i=>({nome:i.nome,qtd:i.qtd,unit:i.unit})),subtotal:pgSub,desconto:c.descValor,autorizadoPor,parcelas:n,pagamentos:[{forma:fp.nome,formaId:fp.id,valor:total,parcelas:n,taxa:c.taxa}],total,status:'pago'};
  db.vendas.push(venda);
- // baixa estoque
  carrinho.forEach(i=>{const p=prodOf(i.id);if(p&&p.tipo==='produto'&&p.estoque!=null)p.estoque=Math.max(0,p.estoque-i.qtd);});
- // financeiro + caixa
- db.financeiro.push({id:uid('f'),tipo:'receita',desc:'Venda — '+(pdvCliente?cli(pdvCliente).nome:'Consumidor'),cat:'Vendas',valor:total,venc:todayISO(),pago:true,forma,data:todayISO()});
- if(db.caixa&&db.caixa.aberto){const now=new Date();db.caixa.movimentos.push({h:String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0'),tipo:'entrada',desc:'Venda #'+venda.id,valor:total,forma});}
- save();closeModal();toast('Venda finalizada · '+BRL(total)+' ✓');carrinho=[];pdvCliente='';pdvBusca='';renderNav();renderPDV();
+ // gera 1 recebível por parcela, com taxa/líquido e data de liberação
+ const vC=Math.round(total*100),lC=Math.round(c.liquido*100),bV=Math.floor(vC/n),bL=Math.floor(lC/n);
+ for(let k=1;k<=n;k++){
+   const vk=(k===n?vC-bV*(n-1):bV)/100, lk=(k===n?lC-bL*(n-1):bL)/100;
+   const lib=fp.prazoDias?fmtDate(new Date(Date.now()+fp.prazoDias*k*864e5)):todayISO();
+   db.financeiro.push({id:uid('f'),tipo:'receita',desc:'Venda — '+cliNome+(n>1?` (parcela ${k}/${n})`:''),cat:'Vendas',valor:vk,venc:lib,pago:true,forma:fp.nome,formaId:fp.id,contaId:fp.contaId,taxa:c.taxa,liquido:lk,liberacao:lib,parcela:n>1?`${k}/${n}`:'',data:todayISO()});
+ }
+ if(fp.tipo==='dinheiro'&&db.caixa&&db.caixa.aberto){const now=new Date();db.caixa.movimentos.push({h:String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0'),tipo:'entrada',desc:'Venda #'+venda.id,valor:total,forma:fp.nome,formaId:fp.id});}
+ save();closeModal();toast('Venda finalizada · '+BRL(total)+(n>1?` em ${n}×`:'')+(c.taxa?' (líq. '+BRL(c.liquido)+')':'')+' ✓');carrinho=[];pdvCliente='';pdvBusca='';renderNav();renderPDV();
 }
 function verVendas(){
  const list=db.vendas.slice().sort((a,b)=>b.data.localeCompare(a.data));
  const body=`<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Data</th><th>Cliente</th><th>Itens</th><th>Pgto</th><th class="num">Total</th></tr></thead><tbody>
-   ${list.map(v=>`<tr><td>${ddmmyy(v.data)}</td><td>${v.clienteId?cli(v.clienteId)?.nome:'Consumidor'}</td><td class="t-sub">${v.itens.map(i=>i.qtd+'× '+i.nome).join(', ')}</td><td><span class="tag">${v.pagamentos[0].forma}</span></td><td class="num">${BRL(v.total)}</td></tr>`).join('')}
+   ${list.map(v=>`<tr><td>${ddmmyy(v.data)}</td><td>${v.clienteId?cli(v.clienteId)?.nome:'Consumidor'}</td><td class="t-sub">${v.itens.map(i=>i.qtd+'× '+i.nome).join(', ')}</td><td><span class="tag">${v.pagamentos[0].forma}</span>${v.pagamentos[0].parcelas>1?` <span class="tag">${v.pagamentos[0].parcelas}x</span>`:''}${v.desconto>0?` <span class="tag" style="background:var(--accent-soft);color:var(--accent-600)">−${BRL(v.desconto)}</span>`:''}</td><td class="num">${BRL(v.total)}</td></tr>`).join('')}
  </tbody></table></div>`;
  openModal({title:'Histórico de vendas',body,size:'wide',foot:`<button class="btn btn-ghost" onclick="closeModal()">Fechar</button>`});
 }
@@ -1435,18 +1520,23 @@ function movEstoque(id){
 }
 function aplicarMov(id){const p=prodOf(id);const tipo=$('#movTipo .active').dataset.t;const q=parseInt($('#movQtd').value)||0;p.estoque=tipo==='entrada'?p.estoque+q:Math.max(0,p.estoque-q);save();closeModal();toast('Estoque atualizado ✓');renderNav();renderEstoque();}
 function entradaRapida(id,q){const p=prodOf(id);p.estoque+=q;save();toast('+'+q+' '+p.nome+' ✓');renderNav();renderEstoque();}
-function openNovoProduto(){
- const body=`<div class="field"><label>Nome <span class="req">*</span></label><input class="inp" id="npNome"></div>
-   <div class="frow"><div class="field"><label>Tipo</label><select class="sel" id="npTipo"><option value="produto">Produto</option><option value="servico">Serviço</option></select></div><div class="field"><label>Categoria</label><input class="inp" id="npCat" placeholder="ex: Medicamentos"></div></div>
-   <div class="frow-3"><div class="field"><label>Custo</label><input class="inp" type="number" step="0.01" id="npCusto" value="0"></div><div class="field"><label>Preço venda <span class="req">*</span></label><input class="inp" type="number" step="0.01" id="npPreco" value="0"></div><div class="field"><label>Unidade</label><input class="inp" id="npUnid" value="un"></div></div>
-   <div class="frow-3"><div class="field"><label>Estoque inicial</label><input class="inp" type="number" id="npEst" value="0"></div><div class="field"><label>Estoque mínimo</label><input class="inp" type="number" id="npMin" value="5"></div><div class="field"><label>Validade</label><input type="date" class="inp" id="npVal"></div></div>`;
- openModal({title:'Novo produto / serviço',body,size:'wide',foot:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="salvarProduto()">${ic('check',15)} Salvar</button>`});
+function openNovoProduto(id,presetTipo){
+ const p=id?prodOf(id):null;const tipo=p?p.tipo:(presetTipo||'produto');
+ const cats=[...new Set(db.produtos.map(x=>x.cat))].filter(Boolean);
+ const body=`<div class="field"><label>Nome <span class="req">*</span></label><input class="inp" id="npNome" value="${p?p.nome.replace(/"/g,'&quot;'):''}"></div>
+   <div class="frow"><div class="field"><label>Tipo</label><select class="sel" id="npTipo" onchange="npToggleEstoque()"><option value="produto" ${tipo==='produto'?'selected':''}>Produto</option><option value="servico" ${tipo==='servico'?'selected':''}>Serviço</option></select></div><div class="field"><label>Categoria</label><input class="inp" id="npCat" list="npCats" value="${p?(p.cat||''):''}" placeholder="ex: Medicamentos"><datalist id="npCats">${cats.map(c=>`<option value="${c}">`).join('')}</datalist></div></div>
+   <div class="frow-3"><div class="field"><label>Custo</label><input class="inp" type="number" step="0.01" id="npCusto" value="${p?(p.custo||0):0}"></div><div class="field"><label>Preço venda <span class="req">*</span></label><input class="inp" type="number" step="0.01" id="npPreco" value="${p?p.preco:0}"></div><div class="field"><label>Unidade</label><input class="inp" id="npUnid" value="${p?(p.unidade||'un'):'un'}"></div></div>
+   <div id="npEstoqueBox" style="${tipo==='servico'?'display:none':''}"><div class="frow-3"><div class="field"><label>Estoque ${id?'atual':'inicial'}</label><input class="inp" type="number" id="npEst" value="${p&&p.estoque!=null?p.estoque:0}"></div><div class="field"><label>Estoque mínimo</label><input class="inp" type="number" id="npMin" value="${p?(p.min||5):5}"></div><div class="field"><label>Validade</label><input type="date" class="inp" id="npVal" value="${p?(p.validade||''):''}"></div></div></div>`;
+ openModal({title:id?'Editar item':'Novo produto / serviço',body,size:'wide',foot:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="salvarProduto(${id?"'"+id+"'":'null'})">${ic('check',15)} Salvar</button>`});
 }
-function salvarProduto(){
+function npToggleEstoque(){const t=$('#npTipo').value;const box=$('#npEstoqueBox');if(box)box.style.display=t==='servico'?'none':'';}
+function salvarProduto(id){
  const nome=$('#npNome').value.trim();if(!nome){toast('Informe o nome','err');return;}
  const tipo=$('#npTipo').value;
- db.produtos.push({id:uid('s'),nome,tipo,cat:$('#npCat').value||'Geral',custo:parseFloat($('#npCusto').value)||0,preco:parseFloat($('#npPreco').value)||0,estoque:tipo==='produto'?parseInt($('#npEst').value)||0:null,min:parseInt($('#npMin').value)||0,validade:$('#npVal').value,unidade:$('#npUnid').value||'un',cod:String(7890000+Math.floor(Math.random()*9999))});
- save();closeModal();toast('Produto cadastrado ✓');renderNav();renderEstoque();
+ const dados={nome,tipo,cat:$('#npCat').value||'Geral',custo:parseFloat($('#npCusto').value)||0,preco:parseFloat($('#npPreco').value)||0,estoque:tipo==='produto'?(parseInt($('#npEst').value)||0):null,min:parseInt($('#npMin').value)||0,validade:$('#npVal').value,unidade:$('#npUnid').value||'un'};
+ if(id){const p=prodOf(id);Object.assign(p,dados);toast('Item atualizado ✓');}
+ else{db.produtos.push({id:uid('s'),...dados,cod:String(7890000+Math.floor(Math.random()*9999))});toast(tipo==='servico'?'Serviço cadastrado ✓':'Produto cadastrado ✓');}
+ save();closeModal();renderNav();if(curView==='catalogo')renderCatalogo();else if(curView==='estoque')renderEstoque();else if(curView==='config')renderConfig();
 }
 
 /* ============================================================
@@ -1476,6 +1566,7 @@ function renderFinanceiro(){
    <button class="${finTab==='receber'?'active':''}" onclick="finTab='receber';renderFinanceiro()">A receber</button>
    <button class="${finTab==='pagar'?'active':''}" onclick="finTab='pagar';renderFinanceiro()">A pagar</button>
    <button class="${finTab==='caixa'?'active':''}" onclick="finTab='caixa';renderFinanceiro()">Caixa do dia</button>
+   <button class="${finTab==='contas'?'active':''}" onclick="finTab='contas';renderFinanceiro()">Contas & formas</button>
    <button class="${finTab==='comissoes'?'active':''}" onclick="finTab='comissoes';renderFinanceiro()">Comissões</button>
  </div>
  <div id="finBody"></div>`;
@@ -1514,8 +1605,51 @@ function renderFinBody(){
      <button class="btn btn-ghost" onclick="sangria()">${ic('download',15)} Registrar sangria</button>
      <button class="btn btn-accent" onclick="fecharCaixa(${saldo})">${ic('check',15)} Fechar caixa</button>
    </div></div>`;
+ } else if(finTab==='contas'){
+   const M3=new Date().getMonth();
+   const saldos=db.contas.map(ct=>({ct,...saldoConta(ct)}));
+   const recebiveis=(db.financeiro||[]).filter(f=>f.tipo==='receita'&&f.pago&&f.liberacao&&f.liberacao>todayISO()).sort((a,b)=>a.liberacao.localeCompare(b.liberacao));
+   const totRecebiveis=recebiveis.reduce((s,f)=>s+(f.liquido!=null?f.liquido:f.valor),0);
+   const totalDisp=saldos.reduce((s,x)=>s+x.disp,0),totalLib=saldos.reduce((s,x)=>s+x.aLiberar,0);
+   const taxasMes=db.financeiro.filter(f=>f.tipo==='receita'&&f.pago&&f.taxa&&parseISO(f.data||f.venc).getMonth()===M3).reduce((s,f)=>s+(f.valor-(f.liquido!=null?f.liquido:f.valor)),0);
+   box.innerHTML=`
+     <div class="kpis" style="margin-bottom:16px">
+       ${kpi('money','teal','Disponível em contas',BRL(totalDisp))}
+       ${kpi('clock','gold','A liberar (maquininhas)',BRL(totalLib))}
+       ${kpi('financeiro','coral','Taxas no mês',BRL(taxasMes))}
+     </div>
+     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-bottom:18px">
+       ${saldos.map(x=>`<div class="card card-pad" style="border-left:4px solid ${x.ct.tipo==='caixa'?'var(--brand)':x.ct.tipo==='maquininha'?'var(--gold)':'var(--info)'}">
+         <div class="between"><div class="flex" style="gap:8px"><span class="ic" style="color:var(--muted)">${ic(TIPO_CONTA[x.ct.tipo]?TIPO_CONTA[x.ct.tipo].ic:'money',16)}</span><b style="font-size:14px">${x.ct.nome}</b></div><button class="btn btn-icon btn-ghost btn-sm" onclick="novaConta('${x.ct.id}')">${ic('edit',13)}</button></div>
+         <div style="font-family:'Plus Jakarta Sans';font-size:23px;font-weight:800;margin-top:8px">${BRL(x.disp)}</div>
+         ${x.aLiberar>0?`<div class="t-sub" style="color:var(--gold)">+ ${BRL(x.aLiberar)} a liberar</div>`:`<div class="t-sub">${TIPO_CONTA[x.ct.tipo]?TIPO_CONTA[x.ct.tipo].lbl:''}</div>`}
+       </div>`).join('')}
+       <button class="card card-pad" style="border:2px dashed var(--line);display:grid;place-items:center;cursor:pointer;color:var(--muted);min-height:110px" onclick="novaConta()">${ic('plus',20)}<span style="font-size:12px;margin-top:4px">Nova conta</span></button>
+     </div>
+     ${recebiveis.length?`<div class="card" style="margin-bottom:18px"><div class="card-head"><h3>${ic('clock',17)} Recebíveis a liberar</h3><div class="sp"></div><span class="t-sub">${recebiveis.length} parcela(s) · ${BRL(totRecebiveis)} líquidos</span></div>
+     <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Libera em</th><th>Origem</th><th>Forma</th><th>Conta</th><th class="num">Bruto</th><th class="num">Líquido</th><th></th></tr></thead><tbody>
+       ${recebiveis.slice(0,40).map(f=>{const d=diasEntre(todayISO(),f.liberacao);return `<tr>
+         <td>${ddmmyy(f.liberacao)}<div class="t-sub">em ${d}d</div></td>
+         <td class="t-main">${f.desc}${f.parcela?` <span class="tag">${f.parcela}</span>`:''}</td>
+         <td class="t-sub">${f.forma||'—'}</td>
+         <td class="t-sub">${contaOf(f.contaId)?contaOf(f.contaId).nome:'—'}</td>
+         <td class="num t-sub">${BRL(f.valor)}</td>
+         <td class="num"><b>${BRL(f.liquido!=null?f.liquido:f.valor)}</b></td>
+         <td style="text-align:right"><button class="btn btn-soft btn-sm" onclick="receberRecebivel('${f.id}')">${ic('check',13)} Liberar</button></td>
+       </tr>`;}).join('')}
+     </tbody></table></div></div>`:''}
+     <div class="card"><div class="card-head"><h3>Formas de recebimento</h3><div class="sp"></div><button class="btn btn-soft btn-sm" onclick="novaForma()">${ic('plus',13)} Nova forma</button></div>
+     <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Forma</th><th>Tipo</th><th>Cai na conta</th><th class="num">Taxa</th><th>Prazo</th><th></th></tr></thead><tbody>
+       ${db.formasPag.map(f=>`<tr style="${f.ativo===false?'opacity:.5':''}">
+         <td><div class="cellflex"><span class="ic" style="width:30px;height:30px;border-radius:8px;display:grid;place-items:center;background:var(--surface-2);color:var(--brand)">${ic(TIPO_FORMA[f.tipo]?TIPO_FORMA[f.tipo].ic:'money',14)}</span><b>${f.nome}</b></div></td>
+         <td><span class="tag">${TIPO_FORMA[f.tipo]?TIPO_FORMA[f.tipo].lbl:f.tipo}</span></td>
+         <td class="t-sub">${contaOf(f.contaId)?contaOf(f.contaId).nome:'—'}</td>
+         <td class="num">${f.taxa?f.taxa+'%':'—'}</td>
+         <td class="t-sub">${f.prazoDias?'D+'+f.prazoDias:'na hora'}</td>
+         <td style="text-align:right"><button class="btn btn-icon btn-ghost btn-sm" onclick="novaForma('${f.id}')">${ic('edit',13)}</button><button class="btn btn-icon btn-ghost btn-sm" style="color:var(--danger)" onclick="excluirForma('${f.id}')">${ic('trash',13)}</button></td>
+       </tr>`).join('')}
+     </tbody></table></div></div>`;
  } else {
-   // comissões
    const M2=new Date().getMonth();
    const rows=db.profissionais.map(pr=>{
      const ags=db.agendamentos.filter(a=>a.profId===pr.id&&a.status==='finalizado'&&parseISO(a.data).getMonth()===M2);
@@ -1533,7 +1667,8 @@ function openLancamento(){
  const body=`<div class="field"><label>Tipo</label><div class="seg" id="lcTipo" style="width:100%"><button class="active" data-t="receita" onclick="$$('#lcTipo button').forEach(b=>b.classList.remove('active'));this.classList.add('active');lcCats('receita')" style="flex:1">Receita</button><button data-t="despesa" onclick="$$('#lcTipo button').forEach(b=>b.classList.remove('active'));this.classList.add('active');lcCats('despesa')" style="flex:1">Despesa</button></div></div>
    <div class="field"><label>Descrição <span class="req">*</span></label><input class="inp" id="lcDesc"></div>
    <div class="frow"><div class="field"><label>Valor <span class="req">*</span></label><input class="inp" type="number" step="0.01" id="lcValor"></div><div class="field"><label>Categoria</label><select class="sel" id="lcCat"></select></div></div>
-   <div class="frow"><div class="field"><label>Vencimento</label><input type="date" class="inp" id="lcVenc" value="${todayISO()}"></div><div class="field"><label>Situação</label><select class="sel" id="lcPago"><option value="true">Pago</option><option value="false">Pendente</option></select></div></div>`;
+   <div class="frow"><div class="field"><label>Vencimento</label><input type="date" class="inp" id="lcVenc" value="${todayISO()}"></div><div class="field"><label>Situação</label><select class="sel" id="lcPago"><option value="true">Pago</option><option value="false">Pendente</option></select></div></div>
+   <div class="field"><label>Conta / forma</label><select class="sel" id="lcForma">${(db.formasPag||[]).map(f=>`<option value="${f.id}">${f.nome}${f.taxa?` (${f.taxa}%)`:''}</option>`).join('')}</select></div>`;
  openModal({title:'Novo lançamento',body,size:'wide',foot:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="salvarLancamento()">${ic('check',15)} Salvar</button>`});
  lcCats('receita');
 }
@@ -1542,12 +1677,46 @@ function salvarLancamento(){
  const tipo=$('#lcTipo .active').dataset.t;const desc=$('#lcDesc').value.trim();const valor=parseFloat($('#lcValor').value);
  if(!desc||!valor){toast('Preencha descrição e valor','err');return;}
  const pago=$('#lcPago').value==='true';
- db.financeiro.push({id:uid('f'),tipo,desc,cat:$('#lcCat').value,valor,venc:$('#lcVenc').value,pago,forma:'',data:pago?$('#lcVenc').value:''});
+ const fp=formaOf($('#lcForma').value)||db.formasPag[0];
+ const venc=$('#lcVenc').value;
+ const liquido=tipo==='receita'?+(valor*(1-(fp.taxa||0)/100)).toFixed(2):valor;
+ const liberacao=(pago&&fp.prazoDias)?fmtDate(new Date(parseISO(venc).getTime()+fp.prazoDias*864e5)):venc;
+ db.financeiro.push({id:uid('f'),tipo,desc,cat:$('#lcCat').value,valor,venc,pago,forma:fp.nome,formaId:fp.id,contaId:fp.contaId,taxa:fp.taxa||0,liquido,liberacao,data:pago?venc:''});
  save();closeModal();toast('Lançamento salvo ✓');renderFinanceiro();
 }
-function abrirCaixa(){db.caixa={aberto:true,abertura:todayISO()+' '+new Date().toTimeString().slice(0,5),valorInicial:0,operador:usuarioAtual().nome,movimentos:[]};save();toast('Caixa aberto ✓');renderFinanceiro();}
-function sangria(){const v=prompt('Valor da sangria (R$):');const n=parseFloat((v||'').replace(',','.'));if(!n)return;db.caixa.movimentos.push({h:new Date().toTimeString().slice(0,5),tipo:'sangria',desc:'Sangria',valor:-Math.abs(n),forma:'Dinheiro'});save();toast('Sangria registrada');renderFinanceiro();}
-function fecharCaixa(saldo){if(!confirm('Fechar o caixa com saldo de '+BRL(saldo)+'?'))return;db.caixa.aberto=false;save();toast('Caixa fechado ✓');renderFinanceiro();}
+function abrirCaixa(){db.caixa={aberto:true,abertura:todayISO()+' '+new Date().toTimeString().slice(0,5),valorInicial:0,operador:usuarioAtual().nome,movimentos:[]};save();toast('Caixa aberto ✓');(curView==='pdv'?renderPDV():renderFinanceiro());}
+function sangria(){const v=prompt('Valor da sangria (R$):');const n=parseFloat((v||'').replace(',','.'));if(!n)return;db.caixa.movimentos.push({h:new Date().toTimeString().slice(0,5),tipo:'sangria',desc:'Sangria',valor:-Math.abs(n),forma:'Dinheiro'});save();toast('Sangria registrada');(curView==='pdv'?renderPDV():renderFinanceiro());}
+function fecharCaixa(saldo){if(!confirm('Fechar o caixa com saldo de '+BRL(saldo)+'?'))return;db.caixa.aberto=false;save();toast('Caixa fechado ✓');(curView==='pdv'?renderPDV():renderFinanceiro());}
+function caixaPainelHTML(){
+ const c=db.caixa;
+ if(!c||!c.aberto){
+   return `<div class="card card-pad"><div class="flex" style="gap:8px;margin-bottom:10px"><span style="color:var(--brand)">${ic('money',17)}</span><b style="font-size:14px">Caixa do dia</b></div>${emptyState('money','Caixa fechado','Abra o caixa para registrar o dinheiro do dia.','<button class="btn btn-primary btn-sm" onclick="abrirCaixa()">'+ic('plus',14)+' Abrir caixa</button>')}</div>`;
+ }
+ const entradas=c.movimentos.filter(m=>m.valor>0).reduce((s,m)=>s+m.valor,0);
+ const saidas=c.movimentos.filter(m=>m.valor<0).reduce((s,m)=>s+Math.abs(m.valor),0);
+ const saldo=c.valorInicial+entradas-saidas;
+ return `<div class="card card-pad">
+   <div class="between" style="margin-bottom:8px"><div class="flex" style="gap:8px"><span style="color:var(--brand)">${ic('money',17)}</span><b style="font-size:14px">Caixa do dia</b></div><span class="t-sub">${(c.operador||'').split(' ')[0]} · ${(c.abertura||'').split(' ')[1]||''}</span></div>
+   <div style="font-family:'Plus Jakarta Sans';font-size:26px;font-weight:800;color:var(--brand)">${BRL(saldo)}</div>
+   <div class="divider"></div>
+   <div class="between" style="margin-bottom:5px"><span class="t-sub">Abertura</span><b>${BRL(c.valorInicial)}</b></div>
+   <div class="between" style="margin-bottom:5px"><span class="t-sub">Entradas em dinheiro</span><b style="color:var(--ok)">+ ${BRL(entradas)}</b></div>
+   <div class="between"><span class="t-sub">Saídas / sangrias</span><b style="color:var(--danger)">− ${BRL(saidas)}</b></div>
+   <div class="flex" style="gap:8px;margin-top:13px">
+     <button class="btn btn-soft btn-sm" style="flex:1" onclick="verMovimentosCaixa()">${ic('relatorio',13)} Movimentações</button>
+     <button class="btn btn-ghost btn-sm" onclick="sangria()">${ic('download',13)} Sangria</button>
+   </div>
+   <button class="btn btn-accent btn-sm" style="width:100%;margin-top:8px" onclick="fecharCaixa(${saldo})">${ic('check',14)} Fechar caixa</button>
+ </div>`;
+}
+function verMovimentosCaixa(){
+ const c=db.caixa;if(!c||!c.aberto)return;
+ const body=`<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Hora</th><th>Descrição</th><th>Forma</th><th class="num">Valor</th></tr></thead><tbody>
+   <tr><td class="t-sub">${(c.abertura||'').split(' ')[1]||'—'}</td><td class="t-main">Abertura de caixa</td><td class="t-sub">—</td><td class="num">${BRL(c.valorInicial)}</td></tr>
+   ${c.movimentos.map(m=>`<tr><td class="t-sub">${m.h}</td><td>${m.desc}</td><td><span class="tag">${m.forma}</span></td><td class="num" style="color:${m.valor>0?'var(--ok)':'var(--danger)'}">${m.valor>0?'+':'−'} ${BRL(Math.abs(m.valor))}</td></tr>`).join('')}
+ </tbody></table></div>`;
+ openModal({title:'Movimentações do caixa',body,size:'wide',foot:`<button class="btn btn-ghost" onclick="closeModal()">Fechar</button>`});
+}
 
 /* ============================================================
    RELATÓRIOS
@@ -1603,6 +1772,7 @@ function renderConfig(){
    <button class="${cfgTab==='equipe'?'active':''}" onclick="cfgTab='equipe';renderConfig()">Equipe</button>
    <button class="${cfgTab==='usuarios'?'active':''}" onclick="cfgTab='usuarios';renderConfig()">Usuários & Acessos</button>
    <button class="${cfgTab==='catalogo'?'active':''}" onclick="cfgTab='catalogo';renderConfig()">Serviços</button>
+   <button class="${cfgTab==='recebimento'?'active':''}" onclick="cfgTab='recebimento';renderConfig()">Formas de recebimento</button>
  </div>
  <div id="cfgBody"></div>`;
  renderCfgBody();
@@ -1617,7 +1787,12 @@ function renderCfgBody(){
      <div class="field"><label>E-mail</label><input class="inp" id="emEmail" value="${e.email}"></div>
      <div class="field"><label>Meta de faturamento mensal</label><input class="inp" type="number" id="emMeta" value="${db.config.metaMensal}"></div>
      <button class="btn btn-primary" onclick="salvarEmpresa()">${ic('check',15)} Salvar alterações</button>
-   </div></div>`;
+   </div></div>
+   ${supaOn()?`<div class="card" style="max-width:640px;margin-top:16px"><div class="card-pad">
+     <div class="between" style="margin-bottom:10px"><div class="flex" style="gap:8px"><span style="color:var(--brand)">${ic('repeat',16)}</span><b>Nuvem (Supabase)</b></div><span class="tag" style="background:var(--ok-soft);color:var(--ok)">conectado</span></div>
+     <div class="t-sub" style="margin-bottom:12px">Logado como <b>${db.usuarios[0]?db.usuarios[0].email||db.usuarios[0].nome:''}</b>. Clientes e pets estão sincronizados nesta clínica.</div>
+     <div class="flex" style="gap:8px"><button class="btn btn-soft btn-sm" onclick="migrarLocalParaNuvem()">${ic('download',14)} Enviar dados locais p/ nuvem</button><button class="btn btn-ghost btn-sm" onclick="sairConta()">${ic('logout',14)} Sair da conta</button></div>
+   </div></div>`:''}`;
  } else if(cfgTab==='equipe'){
    box.innerHTML=`<div class="card"><div class="card-head"><h3>Profissionais</h3></div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Profissional</th><th>Função</th><th>CRMV</th><th class="num">Comissão</th></tr></thead><tbody>
      ${db.profissionais.map(p=>`<tr><td><div class="cellflex"><div class="av-pet" style="width:34px;height:34px;background:${p.cor}22;color:${p.cor};font-weight:700;font-size:12px">${initials(p.nome)}</div><b>${p.nome}</b></div></td><td>${p.papel}</td><td class="t-sub">${p.crmv||'—'}</td><td class="num">${p.comissao}%</td></tr>`).join('')}
@@ -1630,11 +1805,35 @@ function renderCfgBody(){
    <div class="card card-pad" style="margin-top:14px;max-width:520px"><h4 style="font-size:14px;margin-bottom:10px">Perfis de acesso</h4>
      ${Object.entries(perm).map(([k,v])=>`<div class="between" style="padding:9px 0;border-bottom:1px solid var(--line-2)"><b style="text-transform:capitalize">${k}</b><span class="t-sub">${v}</span></div>`).join('')}
    </div>`;
- } else {
+ } else if(cfgTab==='catalogo'){
    const servicos=db.produtos.filter(p=>p.tipo==='servico');
    box.innerHTML=`<div class="card"><div class="card-head"><h3>Serviços oferecidos</h3><div class="sp"></div><button class="btn btn-soft btn-sm" onclick="openNovoProduto()">${ic('plus',13)} Novo serviço</button></div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Serviço</th><th>Categoria</th><th class="num">Preço</th></tr></thead><tbody>
      ${servicos.map(s=>`<tr><td class="t-main">${s.nome}</td><td><span class="tag">${s.cat}</span></td><td class="num">${BRL(s.preco)}</td></tr>`).join('')}
    </tbody></table></div></div>`;
+ } else {
+   box.innerHTML=`
+     <div style="padding:12px 14px;background:var(--brand-tint);border:1px solid var(--brand-soft);border-radius:12px;margin-bottom:16px;font-size:13px;display:flex;align-items:center;gap:9px">${ic('alert',16)} <span>Cadastre suas próprias formas de recebimento e contas. Elas aparecem automaticamente no PDV e no Financeiro.</span></div>
+     <div class="card" style="margin-bottom:16px"><div class="card-head"><h3>${ic('tag',17)} Formas de recebimento</h3><div class="sp"></div><button class="btn btn-primary btn-sm" onclick="novaForma()">${ic('plus',13)} Nova forma</button></div>
+     <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Forma</th><th>Tipo</th><th>Cai na conta</th><th class="num">Taxa</th><th>Parcelas</th><th>Prazo</th><th></th></tr></thead><tbody>
+       ${db.formasPag.map(f=>`<tr style="${f.ativo===false?'opacity:.5':''}">
+         <td><div class="cellflex"><span class="ic" style="width:30px;height:30px;border-radius:8px;display:grid;place-items:center;background:var(--surface-2);color:var(--brand)">${ic(TIPO_FORMA[f.tipo]?TIPO_FORMA[f.tipo].ic:'money',14)}</span><b>${f.nome}</b></div></td>
+         <td><span class="tag">${TIPO_FORMA[f.tipo]?TIPO_FORMA[f.tipo].lbl:f.tipo}</span></td>
+         <td class="t-sub">${contaOf(f.contaId)?contaOf(f.contaId).nome:'—'}</td>
+         <td class="num">${f.taxa?f.taxa+'%':'—'}</td>
+         <td class="t-sub">${f.tipo==='credito'?'até '+(f.maxParcelas||12)+'x':'à vista'}</td>
+         <td class="t-sub">${f.prazoDias?'D+'+f.prazoDias:'na hora'}</td>
+         <td style="text-align:right"><button class="btn btn-icon btn-ghost btn-sm" onclick="novaForma('${f.id}')">${ic('edit',13)}</button><button class="btn btn-icon btn-ghost btn-sm" style="color:var(--danger)" onclick="excluirForma('${f.id}')">${ic('trash',13)}</button></td>
+       </tr>`).join('')}
+     </tbody></table></div></div>
+     <div class="card"><div class="card-head"><h3>${ic('building',17)} Contas / carteiras</h3><div class="sp"></div><button class="btn btn-soft btn-sm" onclick="novaConta()">${ic('plus',13)} Nova conta</button></div>
+     <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Conta</th><th>Tipo</th><th class="num">Saldo inicial</th><th></th></tr></thead><tbody>
+       ${db.contas.map(c=>`<tr>
+         <td><div class="cellflex"><span class="ic" style="width:30px;height:30px;border-radius:8px;display:grid;place-items:center;background:var(--surface-2);color:var(--info)">${ic(TIPO_CONTA[c.tipo]?TIPO_CONTA[c.tipo].ic:'money',14)}</span><b>${c.nome}</b></div></td>
+         <td><span class="tag">${TIPO_CONTA[c.tipo]?TIPO_CONTA[c.tipo].lbl:c.tipo}</span></td>
+         <td class="num t-sub">${BRL(c.saldoInicial||0)}</td>
+         <td style="text-align:right"><button class="btn btn-icon btn-ghost btn-sm" onclick="novaConta('${c.id}')">${ic('edit',13)}</button></td>
+       </tr>`).join('')}
+     </tbody></table></div></div>`;
  }
 }
 function salvarEmpresa(){const e=db.empresa;e.nome=$('#emNome').value;e.cnpj=$('#emCnpj').value;e.tel=$('#emTel').value;e.end=$('#emEnd').value;e.email=$('#emEmail').value;db.config.metaMensal=parseFloat($('#emMeta').value)||db.config.metaMensal;save();toast('Configurações salvas ✓');}
@@ -1642,9 +1841,113 @@ function salvarEmpresa(){const e=db.empresa;e.nome=$('#emNome').value;e.cnpj=$('
 /* ============================================================
    BOOT
    ============================================================ */
-renderShell();
-go('dash');
-if(location.hash.startsWith('#portal/')){openPortalOverlay(location.hash.split('/')[1],true);}
+/* ============================================================
+   SUPABASE — auth, multi-tenant, sync de clientes/pets
+   ============================================================ */
+function novoId(p){ try{ if(supaOn()&&typeof crypto!=='undefined'&&crypto.randomUUID) return crypto.randomUUID(); }catch(e){} return uid(p); }
+function ehUuid(s){ return typeof s==='string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s); }
+
+// ---- mapeamento app <-> banco (objeto completo em extra; colunas espelhadas p/ busca) ----
+function unmapCliente(c){ const {pets, ...rest}=c; return {
+  id:c.id, clinica_id:clinicaAtual, legacy_id: ehUuid(c.id)?null:c.id,
+  nome:c.nome||'', telefone:c.tel||'', email:c.email||'', cpf:c.cpf||'',
+  endereco:{texto:c.end||''}, hist_import:c.histImport||{}, origem:c.origem||'manual', extra:rest }; }
+function mapCliente(row){ const b=(row.extra&&typeof row.extra==='object')?{...row.extra}:{}; b.id=row.id;
+  b.nome=row.nome??b.nome; b.tel=b.tel??row.telefone??''; b.email=b.email??row.email??''; b.cpf=b.cpf??row.cpf??'';
+  if(row.endereco&&row.endereco.texto&&!b.end)b.end=row.endereco.texto;
+  if(row.hist_import&&!b.histImport)b.histImport=row.hist_import; b.pets=[]; if(!b.criado)b.criado=todayISO(); return b; }
+function unmapPet(p,cliId){ return {
+  id:p.id, clinica_id:clinicaAtual, cliente_id:cliId, legacy_id: ehUuid(p.id)?null:p.id,
+  nome:p.nome||'', especie:p.especie||'', raca:p.raca||'', sexo:p.sexo||'', peso:parseFloat(p.peso)||null, extra:p }; }
+function mapPet(row){ const p=(row.extra&&typeof row.extra==='object')?{...row.extra}:{}; p.id=row.id; p.nome=p.nome??row.nome;
+  if(!p.vacinas)p.vacinas=[]; if(!p.prontuario)p.prontuario=[]; return p; }
+
+async function carregarClinica(){
+  try{
+    const { data:{ user } } = await sb.auth.getUser();
+    if(!user) return false;
+    const { data:membros, error:e1 } = await sb.from('membros').select('*').eq('user_id',user.id).limit(1);
+    if(e1) throw e1;
+    if(!membros||!membros.length) return false;
+    membroAtual=membros[0]; clinicaAtual=membroAtual.clinica_id;
+    db.usuarios=[{ id:user.id, nome:membroAtual.nome||user.email, perfil:membroAtual.papel||'dono', email:user.email }];
+    const { data:cls, error:e2 } = await sb.from('clientes').select('*').eq('clinica_id',clinicaAtual);
+    if(e2) throw e2;
+    const { data:pts, error:e3 } = await sb.from('pets').select('*').eq('clinica_id',clinicaAtual);
+    if(e3) throw e3;
+    const clientes=(cls||[]).map(mapCliente), byId={}; clientes.forEach(c=>byId[c.id]=c);
+    (pts||[]).forEach(row=>{ const c=byId[row.cliente_id]; if(c) c.pets.push(mapPet(row)); });
+    db.clientes=clientes;
+    return true;
+  }catch(err){ console.error('carregarClinica:',err); toast('Erro ao carregar dados da clínica','err'); return true; }
+}
+async function persistirCliente(c){ if(!supaOn()||!c)return; try{ const {error}=await sb.from('clientes').upsert(unmapCliente(c)); if(error)throw error; }catch(err){ console.error('persistirCliente:',err); toast('Falha ao salvar cliente na nuvem','err'); } }
+async function persistirPet(p,cliId){ if(!supaOn()||!p)return; try{ const {error}=await sb.from('pets').upsert(unmapPet(p,cliId)); if(error)throw error; }catch(err){ console.error('persistirPet:',err); toast('Falha ao salvar pet na nuvem','err'); } }
+async function removerCliente(id){ if(!supaOn())return; try{ await sb.from('clientes').delete().eq('id',id); }catch(e){ console.error(e); } }
+async function removerPet(id){ if(!supaOn())return; try{ await sb.from('pets').delete().eq('id',id); }catch(e){ console.error(e); } }
+
+// ---- migração: enviar os dados locais (ex: 690 clientes importados) p/ a nuvem ----
+async function migrarLocalParaNuvem(){
+  if(!supaOn()){ toast('Disponível só no modo nuvem','err'); return; }
+  const local=load(); if(!local||!local.clientes||!local.clientes.length){ toast('Nada local para enviar'); return; }
+  if(!confirm('Enviar '+local.clientes.length+' clientes (e seus pets) para a nuvem desta clínica?')) return;
+  toast('Enviando… isso pode levar alguns segundos');
+  try{
+    const cls=[], pts=[];
+    local.clientes.forEach(c0=>{
+      const c={...c0}; const old=c.id; if(!ehUuid(c.id)) c.id=novoId('c'); c.legacyOld=old;
+      const pets=(c.pets||[]); cls.push(unmapCliente(c));
+      pets.forEach(p0=>{ const p={...p0}; if(!ehUuid(p.id)) p.id=novoId('p'); pts.push(unmapPet(p,c.id)); });
+    });
+    for(let i=0;i<cls.length;i+=200){ const {error}=await sb.from('clientes').upsert(cls.slice(i,i+200)); if(error)throw error; }
+    for(let i=0;i<pts.length;i+=200){ const {error}=await sb.from('pets').upsert(pts.slice(i,i+200)); if(error)throw error; }
+    toast('Enviados '+cls.length+' clientes e '+pts.length+' pets ✓');
+    await carregarClinica(); renderView();
+  }catch(err){ console.error(err); toast('Falha na migração: '+(err.message||''),'err'); }
+}
+
+// ---- AUTH UI ----
+function renderAuth(modo){ modo=modo||'login';
+  $('#app').innerHTML=`<div style="min-height:100vh;display:grid;place-items:center;background:var(--bg);padding:20px">
+    <div class="card" style="width:100%;max-width:380px;padding:30px 26px">
+      <div style="text-align:center;margin-bottom:20px"><div style="font-family:'Plus Jakarta Sans';font-weight:800;font-size:24px;color:var(--brand)">Vetória</div><div class="t-sub">${modo==='login'?'Entre na sua conta':'Crie sua conta'}</div></div>
+      <div class="field"><label>E-mail</label><input class="inp" id="auEmail" type="email" placeholder="voce@email.com"></div>
+      <div class="field"><label>Senha</label><input class="inp" id="auSenha" type="password" placeholder="••••••••"></div>
+      ${modo==='signup'?`<div class="field"><label>Seu nome</label><input class="inp" id="auNome" placeholder="Como quer ser chamado(a)"></div>`:''}
+      <button class="btn btn-primary" style="width:100%;margin-top:6px" id="auBtn" onclick="${modo==='login'?'fazerLogin()':'fazerCadastro()'}">${modo==='login'?'Entrar':'Criar conta'}</button>
+      <div style="text-align:center;margin-top:14px;font-size:13px">${modo==='login'?`Não tem conta? <a href="#" onclick="renderAuth('signup');return false" style="color:var(--brand);font-weight:600">Cadastrar</a>`:`Já tem conta? <a href="#" onclick="renderAuth('login');return false" style="color:var(--brand);font-weight:600">Entrar</a>`}</div>
+      <div style="text-align:center;margin-top:18px;border-top:1px solid var(--line-2);padding-top:14px"><a href="#" onclick="entrarDemo();return false" class="t-sub" style="text-decoration:underline">Entrar em modo demonstração</a></div>
+    </div></div>`;
+}
+async function fazerLogin(){ const email=$('#auEmail').value.trim(),senha=$('#auSenha').value; if(!email||!senha){toast('Preencha e-mail e senha','err');return;} $('#auBtn').textContent='Entrando…';
+  try{ const {error}=await sb.auth.signInWithPassword({email,password:senha}); if(error)throw error; iniciar(); }catch(err){ toast(err.message||'Falha no login','err'); if($('#auBtn'))$('#auBtn').textContent='Entrar'; } }
+async function fazerCadastro(){ const email=$('#auEmail').value.trim(),senha=$('#auSenha').value,nome=($('#auNome')?$('#auNome').value.trim():''); if(!email||!senha){toast('Preencha e-mail e senha','err');return;} if(senha.length<6){toast('Senha de no mínimo 6 caracteres','err');return;} $('#auBtn').textContent='Criando…';
+  try{ const {data,error}=await sb.auth.signUp({email,password:senha}); if(error)throw error; sessionStorage.setItem('vet_nome',nome||''); if(!data.session){ toast('Conta criada! Confirme o e-mail (se exigido) e faça login.'); renderAuth('login'); return; } iniciar(); }catch(err){ toast(err.message||'Falha no cadastro','err'); if($('#auBtn'))$('#auBtn').textContent='Criar conta'; } }
+function renderOnboarding(){ $('#app').innerHTML=`<div style="min-height:100vh;display:grid;place-items:center;background:var(--bg);padding:20px">
+    <div class="card" style="width:100%;max-width:400px;padding:30px 26px">
+      <div style="font-family:'Plus Jakarta Sans';font-weight:800;font-size:20px;margin-bottom:4px">Vamos criar sua clínica</div>
+      <div class="t-sub" style="margin-bottom:18px">Esse será o espaço dos seus dados, isolado de qualquer outra clínica.</div>
+      <div class="field"><label>Nome da clínica</label><input class="inp" id="obNome" placeholder="Ex: Clínica Vet Aracaju"></div>
+      <div class="field"><label>Seu nome</label><input class="inp" id="obMeu" value="${sessionStorage.getItem('vet_nome')||''}" placeholder="Seu nome"></div>
+      <button class="btn btn-primary" style="width:100%;margin-top:6px" id="obBtn" onclick="criarClinica()">Criar e começar</button>
+    </div></div>`; }
+async function criarClinica(){ const nome=$('#obNome').value.trim(),meu=$('#obMeu').value.trim(); if(!nome){toast('Informe o nome da clínica','err');return;} $('#obBtn').textContent='Criando…';
+  try{ const {error}=await sb.rpc('criar_clinica',{p_nome:nome,p_meu_nome:meu||null}); if(error)throw error; sessionStorage.removeItem('vet_nome'); iniciar(); }catch(err){ toast(err.message||'Falha ao criar clínica','err'); if($('#obBtn'))$('#obBtn').textContent='Criar e começar'; } }
+function entrarDemo(){ modoDemo=true; renderShell(); go('dash'); }
+async function sairConta(){ try{ if(sb) await sb.auth.signOut(); }catch(e){} clinicaAtual=null; membroAtual=null; location.reload(); }
+
+// ---- BOOT ----
+async function iniciar(){
+  if(supaOn()){
+    let sess=null; try{ sess=(await sb.auth.getSession()).data.session; }catch(e){}
+    if(!sess){ renderAuth('login'); return; }
+    const temClinica=await carregarClinica();
+    if(!temClinica){ renderOnboarding(); return; }
+  }
+  renderShell(); go('dash');
+  if(location.hash.startsWith('#portal/')){ openPortalOverlay(location.hash.split('/')[1],true); }
+}
+iniciar();
 window.addEventListener('hashchange',()=>{if(location.hash.startsWith('#portal/'))openPortalOverlay(location.hash.split('/')[1],true);else closePortalOverlay();});
 
 /* ============================================================
@@ -1835,7 +2138,7 @@ function faturarOrcamento(id){
  const venda={id:uid('vd'),data:todayISO(),clienteId:o.clienteId,profId:o.profId,itens:o.itens,pagamentos:[{forma:'A definir',valor:o.total}],total:o.total,status:'pago',origem:'orcamento'};
  db.vendas.push(venda);
  o.itens.forEach(i=>{const p=db.produtos.find(x=>x.nome===i.nome);if(p&&p.tipo==='produto'&&p.estoque!=null)p.estoque=Math.max(0,p.estoque-i.qtd);});
- db.financeiro.push({id:uid('f'),tipo:'receita',desc:'Orçamento faturado — '+(cli(o.clienteId)?.nome||''),cat:'Serviços',valor:o.total,venc:todayISO(),pago:true,forma:'A definir',data:todayISO()});
+ db.financeiro.push({id:uid('f'),tipo:'receita',desc:'Orçamento faturado — '+(cli(o.clienteId)?.nome||''),cat:'Serviços',valor:o.total,venc:todayISO(),pago:true,forma:'A definir',formaId:'fp_pixc6',contaId:'ct_c6',data:todayISO()});
  o.status='faturado';save();closeModal();toast('Orçamento faturado · '+BRL(o.total)+' ✓');renderNav();renderOrcamentos();
 }
 function imprimirOrcamento(id){
@@ -2079,7 +2382,7 @@ function salvarAssinatura(){
  if(!db.assinaturas)db.assinaturas=[];
  db.assinaturas.push({id:uid('as'),planoId,clienteId:cliente.id,petId,inicio,proxCobranca:prox,status:'ativo',saldo:pl.qtdServicos,historico:[{data:inicio,txt:'Assinatura iniciada'}]});
  // primeira cobrança como receita
- db.financeiro.push({id:uid('f'),tipo:'receita',desc:'Assinatura — '+pl.nome+' ('+cliente.nome+')',cat:'Planos',valor:pl.preco,venc:inicio,pago:true,forma:'Recorrente',data:inicio});
+ db.financeiro.push({id:uid('f'),tipo:'receita',desc:'Assinatura — '+pl.nome+' ('+cliente.nome+')',cat:'Planos',valor:pl.preco,venc:inicio,pago:true,forma:'Recorrente',formaId:'fp_pixc6',contaId:'ct_c6',data:inicio});
  save();closeModal();toast('Assinatura ativada ✓');renderPlanos();
 }
 function abrirAssinatura(id){
@@ -2105,19 +2408,22 @@ function abrirAssinatura(id){
  openModal({title:'Gerenciar assinatura',body,size:'wide',foot:`<button class="btn btn-ghost" onclick="closeModal()">Fechar</button>`});
 }
 function usarSaldo(id){const a=db.assinaturas.find(x=>x.id===id);if(a.saldo<=0)return;a.saldo--;a.historico.push({data:todayISO(),txt:'Serviço utilizado (saldo → '+a.saldo+')'});save();toast('Saldo atualizado: '+a.saldo+' restante(s)');abrirAssinatura(id);}
-function cobrarAssinatura(id){const a=db.assinaturas.find(x=>x.id===id);const pl=planoOf(a.planoId);const c=cli(a.clienteId);const d=parseISO(a.proxCobranca);a.proxCobranca=fmtDate(new Date(d.getFullYear(),d.getMonth()+1,d.getDate()));a.saldo=pl.qtdServicos;a.historico.push({data:todayISO(),txt:'Cobrança registrada ('+BRL(pl.preco)+') · saldo renovado'});db.financeiro.push({id:uid('f'),tipo:'receita',desc:'Assinatura — '+pl.nome+' ('+c.nome+')',cat:'Planos',valor:pl.preco,venc:todayISO(),pago:true,forma:'Recorrente',data:todayISO()});save();toast('Cobrança registrada ✓');abrirAssinatura(id);}
+function cobrarAssinatura(id){const a=db.assinaturas.find(x=>x.id===id);const pl=planoOf(a.planoId);const c=cli(a.clienteId);const d=parseISO(a.proxCobranca);a.proxCobranca=fmtDate(new Date(d.getFullYear(),d.getMonth()+1,d.getDate()));a.saldo=pl.qtdServicos;a.historico.push({data:todayISO(),txt:'Cobrança registrada ('+BRL(pl.preco)+') · saldo renovado'});db.financeiro.push({id:uid('f'),tipo:'receita',desc:'Assinatura — '+pl.nome+' ('+c.nome+')',cat:'Planos',valor:pl.preco,venc:todayISO(),pago:true,forma:'Recorrente',formaId:'fp_pixc6',contaId:'ct_c6',data:todayISO()});save();toast('Cobrança registrada ✓');abrirAssinatura(id);}
 function pausarAssinatura(id){const a=db.assinaturas.find(x=>x.id===id);a.status='pausado';a.historico.push({data:todayISO(),txt:'Assinatura pausada'});save();abrirAssinatura(id);renderNav();}
 function reativarAssinatura(id){const a=db.assinaturas.find(x=>x.id===id);a.status='ativo';a.historico.push({data:todayISO(),txt:'Assinatura reativada'});save();abrirAssinatura(id);renderNav();}
 function cancelarAssinatura(id){if(!confirm('Cancelar esta assinatura?'))return;const a=db.assinaturas.find(x=>x.id===id);a.status='cancelado';a.historico.push({data:todayISO(),txt:'Assinatura cancelada'});save();abrirAssinatura(id);renderNav();}
 function novoPlano(){
+ const servicos=db.produtos.filter(p=>p.tipo==='servico');
  const body=`<div class="field"><label>Nome do plano <span class="req">*</span></label><input class="inp" id="plNome" placeholder="Ex: Clube do Banho — Mensal"></div>
    <div class="frow"><div class="field"><label>Tipo</label><select class="sel" id="plTipo"><option value="banho">Banho & Tosa</option><option value="saude">Saúde</option></select></div>
    <div class="field"><label>Preço/mês <span class="req">*</span></label><input class="inp" type="number" step="0.01" id="plPreco"></div></div>
-   <div class="field"><label>Serviços inclusos/mês</label><input class="inp" type="number" id="plQtd" value="4"></div>
+   <div class="frow"><div class="field"><label>Serviço incluído <span class="req">*</span></label><select class="sel" id="plServico">${servicos.length?servicos.map(s=>`<option value="${s.id}">${s.nome} — ${BRL(s.preco)}</option>`).join(''):'<option value="">Cadastre serviços no Catálogo</option>'}</select></div>
+   <div class="field"><label>Qtd inclusa/mês</label><input class="inp" type="number" id="plQtd" value="4"></div></div>
+   <div class="t-sub" style="margin:-4px 0 10px;display:flex;align-items:center;gap:6px">${ic('tag',13)} Os serviços vêm do <a href="javascript:closeModal();go('catalogo')" style="color:var(--brand)">Catálogo</a>.</div>
    <div class="field"><label>Descrição</label><textarea class="inp" id="plDesc"></textarea></div>`;
  openModal({title:'Novo plano',body,foot:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="salvarPlano()">${ic('check',15)} Criar plano</button>`});
 }
-function salvarPlano(){const nome=$('#plNome').value.trim();const preco=parseFloat($('#plPreco').value);if(!nome||!preco){toast('Preencha nome e preço','err');return;}const cores=['var(--brand)','var(--info)','var(--purple)','var(--accent)','var(--gold)'];if(!db.planos)db.planos=[];db.planos.push({id:uid('pl'),nome,tipo:$('#plTipo').value,preco,periodo:'mensal',qtdServicos:parseInt($('#plQtd').value)||1,servico:'',cor:cores[db.planos.length%cores.length],desc:$('#plDesc').value});save();closeModal();toast('Plano criado ✓');planTab='planos';renderPlanos();}
+function salvarPlano(){const nome=$('#plNome').value.trim();const preco=parseFloat($('#plPreco').value);if(!nome||!preco){toast('Preencha nome e preço','err');return;}const cores=['var(--brand)','var(--info)','var(--purple)','var(--accent)','var(--gold)'];if(!db.planos)db.planos=[];const sv=prodOf($('#plServico').value);db.planos.push({id:uid('pl'),nome,tipo:$('#plTipo').value,preco,periodo:'mensal',qtdServicos:parseInt($('#plQtd').value)||1,servicoId:sv?sv.id:'',servico:sv?sv.nome:'',cor:cores[db.planos.length%cores.length],desc:$('#plDesc').value});save();closeModal();toast('Plano criado ✓');planTab='planos';renderPlanos();}
 
 /* ============================================================
    TIMELINE DO PET (histórico unificado)
@@ -2242,9 +2548,10 @@ function metricasCliente(c){
  db.agendamentos.filter(a=>a.clienteId===c.id&&a.status==='finalizado').forEach(a=>{datas.add(a.data);valor+=a.valor||0;});
  c.pets.forEach(p=>(p.prontuario||[]).forEach(h=>{if(h.data)datas.add(h.data);}));
  (db.assinaturas||[]).filter(s=>s.clienteId===c.id).forEach(s=>(s.historico||[]).forEach(h=>{if(/Cobran/.test(h.txt)){const pl=(db.planos||[]).find(p=>p.id===s.planoId);if(pl)valor+=pl.preco;}}));
- const arr=[...datas].sort();const ultima=arr.length?arr[arr.length-1]:null;
+ const arr=[...datas].sort();let ultima=arr.length?arr[arr.length-1]:null;let freq=datas.size;
+ if(c.histImport){freq+=c.histImport.freq||0;valor+=c.histImport.valor||0;if(c.histImport.ultima&&(!ultima||c.histImport.ultima>ultima))ultima=c.histImport.ultima;}
  const recencia=ultima?diasEntre(ultima,todayISO()):null;
- return {freq:datas.size,valor,ultima,recencia};
+ return {freq,valor,ultima,recencia};
 }
 function segmentoCliente(m){
  if(m.recencia===null)return {nome:'Sem histórico',cor:'var(--muted)'};
@@ -2309,6 +2616,256 @@ function renderRetencao(){
    </tr>`).join('')}</tbody>
  </table></div></div>`;
 }
+
+/* ============================================================
+   CATÁLOGO (serviços e produtos — fonte central)
+   ============================================================ */
+let catTab='servico',catBusca='';
+function catCategorias(tipo){return [...new Set(db.produtos.filter(p=>p.tipo===tipo).map(p=>p.cat))].filter(Boolean);}
+function renderCatalogo(){
+ const servicos=db.produtos.filter(p=>p.tipo==='servico');
+ const produtos=db.produtos.filter(p=>p.tipo==='produto');
+ const q=catBusca.toLowerCase();
+ const lista=(catTab==='servico'?servicos:produtos).filter(p=>!q||p.nome.toLowerCase().includes(q)||(p.cat||'').toLowerCase().includes(q)).sort((a,b)=>a.nome.localeCompare(b.nome));
+ const ticketServ=servicos.length?servicos.reduce((s,p)=>s+p.preco,0)/servicos.length:0;
+ $('#content').innerHTML=`
+ ${phead('Catálogo','Serviços e produtos cadastrados uma vez — usados em PDV, orçamentos, planos, agenda e estoque.',
+   `<button class="btn btn-primary" onclick="openNovoProduto(null,'${catTab}')">${ic('plus',15)} Novo ${catTab==='servico'?'serviço':'produto'}</button>`)}
+ <div class="kpis">
+   ${kpi('tag','teal','Serviços',servicos.length)}
+   ${kpi('box','info','Produtos',produtos.length)}
+   ${kpi('money','gold','Ticket médio (serviço)',BRL(ticketServ))}
+ </div>
+ <div class="tabs">
+   <button class="${catTab==='servico'?'active':''}" onclick="catTab='servico';renderCatalogo()">Serviços (${servicos.length})</button>
+   <button class="${catTab==='produto'?'active':''}" onclick="catTab='produto';renderCatalogo()">Produtos (${produtos.length})</button>
+ </div>
+ <div class="card" style="margin-bottom:14px"><div class="card-pad" style="padding:12px 14px"><div class="search" style="max-width:none">${ic('search')}<input id="catBusca" value="${catBusca}" placeholder="Buscar no catálogo…"></div></div></div>
+ <div class="card"><div class="tbl-wrap"><table class="tbl">
+   <thead><tr><th>Nome</th><th>Categoria</th><th class="num">Custo</th><th class="num">Preço</th><th class="num">Margem</th>${catTab==='produto'?'<th class="num">Estoque</th>':''}<th></th></tr></thead>
+   <tbody>${lista.length?lista.map(p=>{const margem=p.preco>0?Math.round((p.preco-(p.custo||0))/p.preco*100):0;return `<tr>
+     <td><div class="cellflex"><span class="ic" style="width:32px;height:32px;border-radius:9px;display:grid;place-items:center;background:var(--surface-2);color:${p.tipo==='servico'?'var(--brand)':'var(--info)'}">${ic(p.tipo==='servico'?'tag':'box',15)}</span><b>${p.nome}</b></div></td>
+     <td><span class="tag">${p.cat||'Geral'}</span></td>
+     <td class="num t-sub">${BRL(p.custo||0)}</td>
+     <td class="num"><b>${BRL(p.preco)}</b></td>
+     <td class="num"><span style="color:${margem>=50?'var(--ok)':margem>=25?'var(--gold)':'var(--danger)'}">${margem}%</span></td>
+     ${catTab==='produto'?`<td class="num">${p.estoque!=null?p.estoque:'—'}</td>`:''}
+     <td style="text-align:right"><button class="btn btn-icon btn-ghost btn-sm" onclick="openNovoProduto('${p.id}')">${ic('edit',14)}</button><button class="btn btn-icon btn-ghost btn-sm" style="color:var(--danger)" onclick="excluirProduto('${p.id}')">${ic('trash',14)}</button></td>
+   </tr>`;}).join(''):`<tr><td colspan="${catTab==='produto'?7:6}">${emptyState('tag','Catálogo vazio','Cadastre o primeiro '+(catTab==='servico'?'serviço':'produto')+'.')}</td></tr>`}</tbody>
+ </table></div></div>`;
+ const inp=$('#catBusca');if(inp)inp.addEventListener('input',e=>{catBusca=e.target.value;const v=catBusca;renderCatalogo();const ni=$('#catBusca');ni.focus();ni.setSelectionRange(v.length,v.length);});
+}
+function excluirProduto(id){const p=prodOf(id);if(!p)return;if(!confirm('Excluir "'+p.nome+'" do catálogo?'))return;db.produtos=db.produtos.filter(x=>x.id!==id);save();toast('Item excluído');renderNav();if(curView==='catalogo')renderCatalogo();else if(curView==='estoque')renderEstoque();}
+
+/* ============================================================
+   IMPORTAÇÃO DE CLIENTES (Excel / CSV — ex: SimplesVet)
+   ============================================================ */
+let impRows=[],impHeaders=[],impMap={},impSV=null;
+const normTxt=s=>String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+const IMP_ALVOS=[
+ {k:'nome',lb:'Nome do cliente',req:true},
+ {k:'tel',lb:'Telefone / WhatsApp'},
+ {k:'email',lb:'E-mail'},
+ {k:'cpf',lb:'CPF'},
+ {k:'end',lb:'Endereço'},
+ {k:'pet',lb:'Pet (nome)'},
+ {k:'valor',lb:'Total gasto (ranking)'},
+ {k:'visitas',lb:'Nº de visitas (ranking)'},
+ {k:'ultima',lb:'Última visita (ranking)'}
+];
+function openImportarClientes(){
+ impRows=[];impHeaders=[];impMap={};
+ const body=`
+   <div style="padding:14px;background:var(--brand-tint);border:1px solid var(--brand-soft);border-radius:12px;margin-bottom:16px;font-size:13px;line-height:1.6">
+     ${ic('upload',16)} Exporte seus clientes do <b>SimplesVet</b> (ou outro sistema) em <b>Excel/CSV</b> e solte aqui. Se a planilha trouxer o <b>ranking</b> (total gasto, nº de visitas, última visita), uso esses dados pra já alimentar a aba <b>Retenção</b> — perfeito pra montar uma clínica modelo.
+   </div>
+   <label for="impFile" style="display:block;border:2px dashed var(--line);border-radius:14px;padding:30px;text-align:center;cursor:pointer;background:var(--surface-2)">
+     <div style="color:var(--brand)">${ic('upload',28)}</div>
+     <div style="font-weight:700;margin-top:8px">Clique para escolher o arquivo</div>
+     <div class="t-sub">.csv, .xlsx ou .xls</div>
+   </label>
+   <input type="file" id="impFile" accept=".csv,.xlsx,.xls,.txt" style="display:none" onchange="handleImportFile(this)">
+   <div style="text-align:center;margin-top:12px"><button class="btn btn-ghost btn-sm" onclick="baixarModeloCSV()">${ic('download',13)} Baixar planilha modelo</button></div>`;
+ openModal({title:'Importar clientes',body,size:'wide',foot:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>`});
+}
+function baixarModeloCSV(){
+ const csv='Nome;Telefone;Email;CPF;Endereço;Pet;Total gasto;Visitas;Última visita\nMaria Silva;(79) 99999-0000;maria@email.com;000.000.000-00;Rua A, 100 — Aracaju/SE;Rex;1250,00;8;10/05/2026\nJoão Souza;(79) 98888-1111;joao@email.com;;Rua B, 200 — Aracaju/SE;Mel;430,50;3;22/02/2026\n';
+ const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='modelo-clientes.csv';a.click();
+}
+function handleImportFile(input){
+ const f=input.files[0];if(!f)return;const ext=f.name.split('.').pop().toLowerCase();
+ if(ext==='csv'||ext==='txt'){const rd=new FileReader();rd.onload=e=>{const {headers,rows}=parseCSV(e.target.result);prepImport(headers,rows);};rd.readAsText(f,'utf-8');}
+ else{ensureXLSX(()=>{const rd=new FileReader();rd.onload=e=>{try{const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});const ws=wb.Sheets[wb.SheetNames[0]];const arr=XLSX.utils.sheet_to_json(ws,{header:1,raw:false,defval:''});const headers=(arr[0]||[]).map(h=>String(h).trim());const rows=arr.slice(1).map(r=>{const o={};headers.forEach((h,i)=>o[h]=r[i]!=null?String(r[i]).trim():'');return o;});prepImport(headers,rows);}catch(err){toast('Erro ao ler o Excel. Tente salvar como CSV.','err');}};rd.readAsArrayBuffer(f);});}
+}
+function ensureXLSX(cb){if(window.XLSX)return cb();toast('Carregando leitor de Excel…');const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';s.onload=()=>cb();s.onerror=()=>toast('Não foi possível carregar o leitor de Excel. Salve a planilha como CSV e tente de novo.','err');document.head.appendChild(s);}
+function parseCSV(text){
+ text=text.replace(/^\ufeff/,'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+ const first=text.split('\n')[0]||'';const delim=(first.split(';').length>first.split(',').length)?';':',';
+ const rows=[];let field='',row=[],inQ=false;
+ for(let i=0;i<text.length;i++){const ch=text[i];
+   if(inQ){if(ch==='"'){if(text[i+1]==='"'){field+='"';i++;}else inQ=false;}else field+=ch;}
+   else{if(ch==='"')inQ=true;else if(ch===delim){row.push(field);field='';}else if(ch==='\n'){row.push(field);rows.push(row);row=[];field='';}else field+=ch;}
+ }
+ if(field.length||row.length){row.push(field);rows.push(row);}
+ const headers=(rows.shift()||[]).map(h=>h.trim());
+ const objs=rows.filter(r=>r.some(c=>c&&c.trim())).map(r=>{const o={};headers.forEach((h,i)=>o[h]=(r[i]||'').trim());return o;});
+ return {headers,rows:objs};
+}
+function autoMap(headers){
+ const find=(...keys)=>headers.find(h=>{const l=h.toLowerCase();return keys.some(k=>l.includes(k));})||'';
+ return {nome:find('nome','cliente','tutor','propriet','respons'),tel:find('celular','whats','telefone','fone','contato'),email:find('email','e-mail'),cpf:find('cpf','documento'),end:find('endere','lograd','rua'),pet:find('pet','animal','paciente'),valor:find('valor','total','gasto','fatur','receita','365'),visitas:find('visita','atendiment','compra','frequ','qtd'),ultima:find('última','ultima','last','recente','venda','data')};
+}
+function prepImport(headers,rows){
+ if(!headers.length||!rows.length){toast('Não encontrei dados na planilha','err');return;}
+ impHeaders=headers;impRows=rows;impSV=null;
+ if(detectarSimplesVet(headers)){impSV=prepararSimplesVet(headers,rows);renderConfirmSV();return;}
+ impMap=autoMap(headers);renderMapeamento();
+}
+function detectarSimplesVet(headers){const n=headers.map(normTxt);return n.some(h=>h.includes('animal - nome'))&&n.some(h=>h.includes('cliente - nome'));}
+function colIdx(headers,substr){const s=normTxt(substr);return headers.find(h=>normTxt(h).includes(s))||'';}
+function prepararSimplesVet(headers,rows){
+ const C=(...s)=>{for(const x of s){const h=colIdx(headers,x);if(h)return h;}return '';};
+ const gi={aniNome:C('animal - nome'),aniEsp:C('animal - especie'),aniRaca:C('animal - raca'),aniSexo:C('animal - sexo'),aniNasc:C('animal - nascimento'),aniPel:C('animal - pelagem'),aniCast:C('animal - esteriliz'),
+   cliCod:C('cliente - codigo'),cliNome:C('cliente - nome'),cliCpf:C('cliente - cpf'),cliEmail:C('cliente - email'),cliTel:C('cliente - telefone'),
+   cliEnd:C('cliente - endereco'),cliBairro:C('cliente - bairro'),cliCidade:C('cliente - cidade'),cliUF:C('cliente - uf'),cliCep:C('cliente - cep'),cliNasc:C('cliente - data de nascimento'),
+   val365:C('ultimos 365','365 dias'),ultVenda:C('cliente - ultima venda','ultima venda'),ticket:C('ticket medio'),abc:C('ranking abc')};
+ const g=(row,h)=>h&&row[h]!=null?String(row[h]).trim():'';
+ const map=new Map();
+ rows.forEach(row=>{
+   const nome=g(row,gi.cliNome);if(!nome)return;
+   const key=g(row,gi.cliCod)||normTxt(nome);
+   if(!map.has(key)){
+     const endParts=[g(row,gi.cliEnd),g(row,gi.cliBairro),[g(row,gi.cliCidade),g(row,gi.cliUF)].filter(Boolean).join('/'),g(row,gi.cliCep)].filter(Boolean);
+     map.set(key,{nome,cpf:g(row,gi.cliCpf),email:g(row,gi.cliEmail),tel:g(row,gi.cliTel),end:endParts.join(', '),nasc:parseData(g(row,gi.cliNasc))||'',
+       val365:parseMoeda(g(row,gi.val365)),ticket:parseMoeda(g(row,gi.ticket)),ultima:parseData(g(row,gi.ultVenda)),abc:g(row,gi.abc),pets:[]});
+   }
+   const pn=g(row,gi.aniNome);
+   if(pn){const e=normTxt(g(row,gi.aniEsp));const esp=e.includes('canin')?'cao':e.includes('felin')?'gato':e.includes('av')?'ave':e.includes('exot')?'exotico':e.includes('roedor')?'roedor':e.includes('reptil')?'reptil':'cao';
+     map.get(key).pets.push({nome:pn,especie:esp,raca:g(row,gi.aniRaca)||'SRD',sexo:normTxt(g(row,gi.aniSexo)).startsWith('m')?'M':'F',porte:'medio',nasc:parseData(g(row,gi.aniNasc))||'',cor:g(row,gi.aniPel),cast:/castrad/i.test(g(row,gi.aniCast))});}
+ });
+ return [...map.values()];
+}
+function renderConfirmSV(){
+ const totAni=impRows.length,totCli=impSV.length,comRank=impSV.filter(c=>c.val365>0).length,comPet=impSV.reduce((s,c)=>s+c.pets.length,0);
+ const amostra=impSV.slice().sort((a,b)=>b.val365-a.val365).slice(0,4);
+ const body=`
+   <div style="display:flex;align-items:center;gap:11px;padding:13px;background:var(--ok-soft);border-radius:12px;margin-bottom:16px">
+     <span style="color:var(--ok)">${ic('check',20)}</span><div style="font-size:13px"><b>Export do SimplesVet detectado!</b><br>Vou agrupar os animais por cliente e juntar os pets automaticamente.</div>
+   </div>
+   <div class="cols-3" style="gap:12px;margin-bottom:16px">
+     <div class="card card-pad" style="text-align:center"><div style="font-family:'Plus Jakarta Sans';font-size:24px;font-weight:800;color:var(--brand)">${totCli}</div><div class="t-sub">clientes</div></div>
+     <div class="card card-pad" style="text-align:center"><div style="font-family:'Plus Jakarta Sans';font-size:24px;font-weight:800;color:var(--info)">${comPet}</div><div class="t-sub">pets (de ${totAni} linhas)</div></div>
+     <div class="card card-pad" style="text-align:center"><div style="font-family:'Plus Jakarta Sans';font-size:24px;font-weight:800;color:var(--gold)">${comRank}</div><div class="t-sub">com histórico</div></div>
+   </div>
+   <label class="flex" style="gap:8px;cursor:pointer;margin-bottom:14px"><input type="checkbox" id="impUsarHist" checked> <span style="font-size:13px">Usar valor pago, ticket e última venda para alimentar a <b>Retenção (RFM)</b></span></label>
+   <div class="t-sub" style="margin-bottom:6px">Prévia (maiores clientes)</div>
+   <div class="tbl-wrap" style="border:1px solid var(--line);border-radius:10px"><table class="tbl"><thead><tr><th>Cliente</th><th>Pets</th><th class="num">Valor 365d</th><th>Última venda</th><th>ABC</th></tr></thead><tbody>
+     ${amostra.map(c=>`<tr><td class="t-main">${c.nome}</td><td class="t-sub">${c.pets.map(p=>p.nome).join(', ')||'—'}</td><td class="num">${BRL(c.val365)}</td><td class="t-sub">${c.ultima?ddmmyy(c.ultima):'—'}</td><td>${c.abc?`<span class="tag">${c.abc}</span>`:'—'}</td></tr>`).join('')}
+   </tbody></table></div>`;
+ openModal({title:'Importar do SimplesVet',body,size:'wide',foot:`<button class="btn btn-ghost" onclick="openImportarClientes()">${ic('chevron',14)} Trocar arquivo</button><button class="btn btn-primary" onclick="confirmarImportSV()">${ic('check',15)} Importar ${totCli} clientes</button>`});
+}
+function confirmarImportSV(){
+ const usarHist=$('#impUsarHist')&&$('#impUsarHist').checked;let add=0;
+ impSV.forEach(cli=>{
+   const c={id:uid('c'),nome:cli.nome,tel:cli.tel,email:cli.email,cpf:cli.cpf,end:cli.end,nasc:cli.nasc,obs:'Importado do SimplesVet'+(cli.abc?' · Ranking '+cli.abc:''),criado:todayISO(),
+     pets:cli.pets.map(p=>({id:uid('p'),nome:p.nome,especie:p.especie,raca:p.raca,sexo:p.sexo,porte:p.porte,nasc:p.nasc,peso:0,cor:p.cor||'',obs:p.cast?'Castrado(a)':'',vacinas:[],prontuario:[],alergias:''}))};
+   if(usarHist&&(cli.val365||cli.ultima)){const freq=cli.ticket>0?Math.max(1,Math.round(cli.val365/cli.ticket)):(cli.val365>0?1:0);c.histImport={valor:cli.val365,freq,ultima:cli.ultima};}
+   db.clientes.push(c);add++;
+ });
+ save();closeModal();toast(add+' clientes importados do SimplesVet ✓');renderNav();renderClientes();
+}
+function renderMapeamento(){
+ const opt=sel=>`<option value="">—</option>`+impHeaders.map(h=>`<option value="${h.replace(/"/g,'&quot;')}" ${sel===h?'selected':''}>${h}</option>`).join('');
+ const temHist=impMap.valor||impMap.visitas||impMap.ultima;
+ const prev=impRows.slice(0,4);
+ const body=`
+   <div class="between" style="margin-bottom:12px"><b style="font-size:14px">${impRows.length} registros encontrados</b><span class="t-sub">Confira o mapeamento das colunas</span></div>
+   <div class="frow" style="flex-wrap:wrap;gap:12px">
+     ${IMP_ALVOS.map(a=>`<div class="field" style="flex:1;min-width:200px"><label>${a.lb}${a.req?' <span class="req">*</span>':''}</label><select class="sel" onchange="impMap['${a.k}']=this.value">${opt(impMap[a.k])}</select></div>`).join('')}
+   </div>
+   <label class="flex" style="gap:8px;cursor:pointer;margin:6px 0 14px;${temHist?'':'opacity:.5;pointer-events:none'}"><input type="checkbox" id="impUsarHist" ${temHist?'checked':''}> <span style="font-size:13px">Usar total gasto / visitas / última visita para alimentar a <b>Retenção (RFM)</b></span></label>
+   <div class="t-sub" style="margin-bottom:6px">Prévia</div>
+   <div class="tbl-wrap" style="border:1px solid var(--line);border-radius:10px"><table class="tbl"><thead><tr>${impHeaders.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>
+     ${prev.map(r=>`<tr>${impHeaders.map(h=>`<td class="t-sub" style="white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis">${r[h]||''}</td>`).join('')}</tr>`).join('')}
+   </tbody></table></div>`;
+ openModal({title:'Mapear colunas',body,size:'wide',foot:`<button class="btn btn-ghost" onclick="openImportarClientes()">${ic('chevron',14)} Trocar arquivo</button><button class="btn btn-primary" onclick="confirmarImport()">${ic('check',15)} Importar ${impRows.length} clientes</button>`});
+}
+function parseMoeda(v){if(v==null||v==='')return 0;let s=String(v).replace(/[R$\s]/gi,'');if(s.includes(',')){s=s.replace(/\./g,'').replace(',','.');}return parseFloat(s.replace(/[^0-9.\-]/g,''))||0;}
+function parseData(v){if(!v)return null;v=String(v).trim();let m;
+ if(m=v.match(/^(\d{4})-(\d{2})-(\d{2})/))return `${m[1]}-${m[2]}-${m[3]}`;
+ if(m=v.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/)){let d=m[1],mo=m[2],y=m[3];if(y.length===2)y='20'+y;return `${y}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}`;}
+ const dt=new Date(v);return isNaN(dt)?null:fmtDate(dt);}
+function confirmarImport(){
+ const m=impMap;if(!m.nome){toast('Selecione a coluna do nome','err');return;}
+ const usarHist=$('#impUsarHist')&&$('#impUsarHist').checked;let add=0;
+ impRows.forEach(r=>{
+   const nome=(r[m.nome]||'').trim();if(!nome)return;
+   const c={id:uid('c'),nome,tel:(m.tel&&r[m.tel]||'').trim(),email:(m.email&&r[m.email]||'').trim(),cpf:(m.cpf&&r[m.cpf]||'').trim(),end:(m.end&&r[m.end]||'').trim(),nasc:'',obs:'Importado de planilha',criado:todayISO(),pets:[]};
+   const petNome=(m.pet&&r[m.pet]||'').trim();
+   if(petNome)c.pets.push({id:uid('p'),nome:petNome,especie:'cao',raca:'SRD',sexo:'M',porte:'medio',nasc:'',peso:0,cor:'',obs:'',vacinas:[],prontuario:[],alergias:''});
+   if(usarHist){const valor=parseMoeda(m.valor&&r[m.valor]);const freq=parseInt(String(m.visitas&&r[m.visitas]||'').replace(/\D/g,''))||0;const ultima=parseData(m.ultima&&r[m.ultima]);if(valor||freq||ultima)c.histImport={valor,freq,ultima};}
+   db.clientes.push(c);add++;
+ });
+ if(!add){toast('Nenhum cliente válido encontrado','err');return;}
+ save();closeModal();toast(add+' cliente(s) importado(s) ✓');renderNav();renderClientes();
+}
+
+/* ============================================================
+   CONTAS & FORMAS DE RECEBIMENTO
+   ============================================================ */
+function saldoConta(ct){
+ let disp=ct.saldoInicial||0,aLiberar=0;
+ (db.financeiro||[]).filter(f=>f.contaId===ct.id&&f.pago).forEach(f=>{
+   const v=f.tipo==='receita'?(f.liquido!=null?f.liquido:f.valor):-(f.valor);
+   if(f.tipo==='receita'&&f.liberacao&&f.liberacao>todayISO())aLiberar+=v;else disp+=v;
+ });
+ return {disp,aLiberar,total:disp+aLiberar};
+}
+function novaConta(id){
+ const c=id?contaOf(id):null;
+ const body=`<div class="field"><label>Nome da conta <span class="req">*</span></label><input class="inp" id="ctNome" value="${c?c.nome.replace(/"/g,'&quot;'):''}" placeholder="Ex: C6 Bank, Stone, Caixa"></div>
+   <div class="frow"><div class="field"><label>Tipo</label><select class="sel" id="ctTipo">${Object.entries(TIPO_CONTA).map(([k,v])=>`<option value="${k}" ${c&&c.tipo===k?'selected':''}>${v.lbl}</option>`).join('')}</select></div>
+   <div class="field"><label>Saldo inicial</label><input class="inp" type="number" step="0.01" id="ctSaldo" value="${c?(c.saldoInicial||0):0}"></div></div>`;
+ openModal({title:id?'Editar conta':'Nova conta',body,foot:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>${id?`<button class="btn btn-ghost" style="color:var(--danger);margin-right:auto" onclick="excluirConta('${id}')">${ic('trash',13)} Excluir</button>`:''}<button class="btn btn-primary" onclick="salvarConta(${id?"'"+id+"'":'null'})">${ic('check',15)} Salvar</button>`});
+}
+function salvarConta(id){
+ const nome=$('#ctNome').value.trim();if(!nome){toast('Informe o nome','err');return;}
+ const dados={nome,tipo:$('#ctTipo').value,saldoInicial:parseFloat($('#ctSaldo').value)||0};
+ if(id)Object.assign(contaOf(id),dados);else db.contas.push({id:uid('ct'),...dados});
+ save();closeModal();toast('Conta salva ✓');(curView==='config'?renderConfig():renderFinanceiro());
+}
+function excluirConta(id){
+ if((db.formasPag||[]).some(f=>f.contaId===id)){toast('Há formas usando esta conta. Edite-as antes.','err');return;}
+ if(!confirm('Excluir esta conta?'))return;
+ db.contas=db.contas.filter(c=>c.id!==id);save();closeModal();toast('Conta excluída');(curView==='config'?renderConfig():renderFinanceiro());
+}
+function novaForma(id){
+ const f=id?formaOf(id):null;const tipo=f?f.tipo:'pix';const maxP=f&&f.maxParcelas?f.maxParcelas:12;
+ const gridParc=[];for(let n=1;n<=12;n++){gridParc.push(`<div class="field" style="margin:0"><label style="font-size:11px">${n}x</label><input class="inp" style="padding:7px 8px" type="number" step="0.01" data-parc="${n}" value="${f?taxaParcela(f,n):(3.19+(n-1)*0.79).toFixed(2)}"></div>`);}
+ const body=`<div class="field"><label>Nome da forma <span class="req">*</span></label><input class="inp" id="fpNome" value="${f?f.nome.replace(/"/g,'&quot;'):''}" placeholder="Ex: Pix C6 Bank, Maquininha Stone"></div>
+   <div class="frow"><div class="field"><label>Tipo</label><select class="sel" id="fpTipo" onchange="fpToggleParc()">${Object.entries(TIPO_FORMA).map(([k,v])=>`<option value="${k}" ${tipo===k?'selected':''}>${v.lbl}</option>`).join('')}</select></div>
+   <div class="field"><label>Cai na conta</label><select class="sel" id="fpConta">${db.contas.map(c=>`<option value="${c.id}" ${f&&f.contaId===c.id?'selected':''}>${c.nome}</option>`).join('')}</select></div></div>
+   <div class="frow"><div class="field"><label>Taxa à vista (%)</label><input class="inp" type="number" step="0.01" id="fpTaxa" value="${f?(f.taxa||0):0}" placeholder="ex: 3.19"></div>
+   <div class="field"><label>Prazo p/ liberar (dias)</label><input class="inp" type="number" id="fpPrazo" value="${f?(f.prazoDias||0):0}" placeholder="ex: 30"></div></div>
+   <div id="fpParcBox" style="${tipo==='credito'?'':'display:none'}">
+     <div class="field" style="margin-bottom:6px"><label>Parcelas aceitas <span class="req">*</span></label><input class="inp" type="number" id="fpMaxParc" min="1" max="12" value="${maxP}" style="max-width:120px"></div>
+     <label style="font-size:12.5px;font-weight:600;color:var(--ink-2)">Taxa da maquininha por parcela (%)</label>
+     <div id="fpGrid" style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-top:8px">${gridParc.join('')}</div>
+     <div class="t-sub" style="margin-top:8px;display:flex;align-items:center;gap:6px">${ic('alert',13)} Cada parcela libera ~30 dias após a anterior, com a taxa correspondente descontada.</div>
+   </div>`;
+ openModal({title:id?'Editar forma':'Nova forma de recebimento',body,size:'wide',foot:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="salvarForma(${id?"'"+id+"'":'null'})">${ic('check',15)} Salvar</button>`});
+}
+function fpToggleParc(){const t=$('#fpTipo').value;const box=$('#fpParcBox');if(box)box.style.display=t==='credito'?'':'none';}
+function salvarForma(id){
+ const nome=$('#fpNome').value.trim();if(!nome){toast('Informe o nome','err');return;}
+ const tipo=$('#fpTipo').value;
+ const dados={nome,tipo,contaId:$('#fpConta').value,taxa:parseFloat($('#fpTaxa').value)||0,prazoDias:parseInt($('#fpPrazo').value)||0,ativo:true};
+ if(tipo==='credito'){dados.maxParcelas=Math.min(12,Math.max(1,parseInt($('#fpMaxParc').value)||12));dados.taxasParcelas=$$('#fpGrid input[data-parc]').map(i=>parseFloat(i.value)||0);}
+ if(id)Object.assign(formaOf(id),dados);else db.formasPag.push({id:uid('fp'),...dados});
+ save();closeModal();toast('Forma salva ✓');(curView==='config'?renderConfig():renderFinanceiro());
+}
+function excluirForma(id){if(!confirm('Excluir esta forma de recebimento?'))return;db.formasPag=db.formasPag.filter(f=>f.id!==id);save();toast('Forma excluída');(curView==='config'?renderConfig():renderFinanceiro());}
+function receberRecebivel(id){const f=db.financeiro.find(x=>x.id===id);if(!f)return;f.liberacao=todayISO();save();toast('Recebível liberado na conta ✓');(curView==='config'?renderConfig():renderFinanceiro());}
 
 </script>
 </body>
