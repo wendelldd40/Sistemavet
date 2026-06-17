@@ -327,11 +327,21 @@ function toast(msg,type='ok'){const t=el('div','toast '+type);const i={ok:'check
 
 /* ---------------- Persistência ---------------- */
 const SK='vetoria_v2';
+const MSG_TPL_PADRAO={
+ confirmacao:'Oi {tutor}! Confirmando o atendimento do(a) {pet} hoje às {hora} na {clinica}. Podemos confirmar? 🐾',
+ lembrete:'Olá {tutor}! Passando para lembrar do atendimento do(a) {pet} em {data} às {hora} ({servico}) na {clinica}. Até lá! 🐶',
+ vacina:'Oi {tutor}! A vacina {vacina} do(a) {pet} {situacao}. Vamos agendar? 💉',
+ aniversario:'Feliz aniversário, {tutor}! 🎉 A equipe da {clinica} deseja um dia incrível para você e seu pet. Conte com a gente! 🐾',
+ retorno:'Oi {tutor}! Como está o(a) {pet} depois do atendimento? Qualquer dúvida estamos à disposição. 💚'
+};
 /* ---------------- Supabase ---------------- */
 const SUPA_URL='https://nrntinlwmsxxugmxxoud.supabase.co';
 const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ybnRpbmx3bXN4eHVnbXh4b3VkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1OTIwNDEsImV4cCI6MjA5NzE2ODA0MX0.AkZZUbomQQp3idmlzSflngFdwUiI-kD7Kr_EzwISX_w';
 let sb=null; try{ if(typeof window!=='undefined'&&window.supabase&&SUPA_URL&&SUPA_KEY){ sb=window.supabase.createClient(SUPA_URL,SUPA_KEY,{auth:{persistSession:true,autoRefreshToken:true}}); } }catch(e){ console.warn('Supabase init falhou:',e); }
 let modoDemo=false, clinicaAtual=null, membroAtual=null, _snap={}, _syncTimer=null;
+let assinatura={plano:'trial',status:'trial',trial_fim:null};
+function diasTrial(){ return assinatura.trial_fim? diasEntre(todayISO(),assinatura.trial_fim) : null; }
+function acessoLiberado(){ if(!supaOn())return true; if(assinatura.status==='ativo')return true; if(assinatura.status==='trial'){ const d=diasTrial(); return d===null||d>=0; } return false; }
 const COL_TIPOS=['profissionais','produtos','agendamentos','internacoes','documentos','orcamentos','planos','assinaturas'];
 const SEED_TIPOS=[];
 function supaOn(){return !!sb && !modoDemo;}
@@ -748,10 +758,13 @@ function renderShell(){
    <div class="sb-scroll" id="navList"></div>
    <div class="sb-foot">
      ${papelReal()==='dono'?(()=>{const opts=[['','Meu acesso (Dono)'],['veterinario','Veterinário'],['recepcao','Recepção']];const lbAtual=papelOverride?PAPEL_LB[papelOverride]:'Meu acesso (Dono)';return `<div style="margin-bottom:10px"><div style="font-size:10.5px;letter-spacing:1.4px;text-transform:uppercase;color:#5E8A7D;font-weight:700;margin:0 4px 6px">Ver como</div><div style="position:relative"><button id="vcBtn" onclick="toggleVerComo(event)" style="width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 11px;border-radius:10px;background:rgba(255,255,255,.08);color:#DCEAE5;border:1px solid rgba(255,255,255,.14);font-size:13px;font-weight:600;cursor:pointer"><span>${lbAtual}</span><span style="opacity:.7;display:flex">${ic('chevron',16)}</span></button><div id="vcList" style="display:none;position:absolute;bottom:calc(100% + 6px);left:0;right:0;background:#0F3B31;border:1px solid rgba(255,255,255,.16);border-radius:10px;padding:5px;box-shadow:0 10px 30px rgba(0,0,0,.4);z-index:60">${opts.map(o=>{const sel=(papelOverride||'')===o[0];const bg=sel?'rgba(18,135,108,.55)':'transparent';return `<button onclick="setPapelOverride('${o[0]}')" style="width:100%;text-align:left;padding:8px 10px;border-radius:7px;color:${sel?'#fff':'#C3DAD2'};background:${bg};font-size:13px;font-weight:600;cursor:pointer" onmouseover="this.style.background='rgba(255,255,255,.1)'" onmouseout="this.style.background='${bg}'">${o[1]}</button>`;}).join('')}</div></div></div>`;})():''}
-     <button class="sb-user" onclick="${podeVer('config')?"go('config')":"toast('Acesso restrito ao Dono/Admin','err')"}">
-       <div class="av">${initials(u.nome)}</div>
-       <div class="nm"><b>${u.nome}</b><span>${PAPEL_LB[papelAtual()]||'Equipe'}${papelOverride?' (prévia)':''}</span></div>
-     </button>
+     <div style="display:flex;align-items:center;gap:6px">
+       <button class="sb-user" style="flex:1;min-width:0" onclick="${podeVer('config')?"go('config')":"toast('Acesso restrito ao Dono/Admin','err')"}">
+         <div class="av">${initials(u.nome)}</div>
+         <div class="nm"><b>${u.nome}</b><span>${PAPEL_LB[papelAtual()]||'Equipe'}${papelOverride?' (prévia)':''}</span></div>
+       </button>
+       <button onclick="if(confirm('Deseja sair da sua conta?'))sairConta()" title="Sair da conta" style="width:38px;height:38px;flex-shrink:0;border-radius:10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#DCEAE5;display:grid;place-items:center;cursor:pointer;transition:.13s" onmouseover="this.style.background='rgba(229,86,86,.22)';this.style.color='#ffc2c2'" onmouseout="this.style.background='rgba(255,255,255,.06)';this.style.color='#DCEAE5'">${ic('logout',16)}</button>
+     </div>
    </div>
   </aside>
   <div class="scrim hide" id="scrim" onclick="toggleSidebar(false)"></div>
@@ -764,6 +777,7 @@ function renderShell(){
      <button class="tb-btn" onclick="abrirNotificacoes()" title="Alertas"><span class="dot"></span>${ic('bell')}</button>
      <button class="btn btn-accent btn-sm" onclick="go('pdv')">${ic('plus',15)} Nova venda</button>
    </header>
+   ${trialBannerHTML()}
    <main class="content" id="content"></main>
   </div>
  </div>`;
@@ -1165,6 +1179,7 @@ function renderPetModal(pet,cliente){
    inner=montarTimeline(pet,cliente);
  } else if(petTab==='resumo'){
    const ultimo=pet.prontuario.slice().sort((a,b)=>b.data.localeCompare(a.data))[0];
+   const curva=curvaPesoSVG(pet);const nPesos=pet.prontuario.filter(h=>h.peso).length;
    inner=`<div class="frow-3" style="gap:14px;margin-bottom:16px">
      <div><div class="t-sub">Espécie / Raça</div><b>${especieEmoji(pet.especie)} ${pet.raca}</b></div>
      <div><div class="t-sub">Idade</div><b>${idade(pet.nasc)}</b></div>
@@ -1178,10 +1193,11 @@ function renderPetModal(pet,cliente){
      <div class="card card-pad" style="text-align:center"><div class="t-sub">Atendimentos</div><div style="font-family:'Plus Jakarta Sans';font-size:22px;font-weight:800">${pet.prontuario.length}</div></div>
      <div class="card card-pad" style="text-align:center"><div class="t-sub">Vacinas</div><div style="font-family:'Plus Jakarta Sans';font-size:22px;font-weight:800">${pet.vacinas.length}</div></div>
      <div class="card card-pad" style="text-align:center"><div class="t-sub">Último peso</div><div style="font-family:'Plus Jakarta Sans';font-size:22px;font-weight:800">${ultimo?ultimo.peso:pet.peso}kg</div></div>
-   </div>`;
+   </div>
+   ${curva?`<div class="card card-pad"><div class="between" style="margin-bottom:6px"><b style="font-size:14px">Curva de peso</b><span class="t-sub">${nPesos} registros</span></div>${curva}</div>`:(nPesos===1?`<div class="t-sub" style="text-align:center;padding:6px">Registre mais um peso para ver a curva de evolução.</div>`:'')}`;
  } else if(petTab==='prontuario'){
    const hist=pet.prontuario.slice().sort((a,b)=>b.data.localeCompare(a.data));
-   inner=`<div class="between" style="margin-bottom:14px"><span class="t-sub">Histórico clínico</span><button class="btn btn-soft btn-sm" onclick="abrirNovoAtendimento('${pet.id}')">${ic('plus',14)} Novo atendimento</button></div>
+   inner=`<div class="between" style="margin-bottom:14px"><span class="t-sub">Histórico clínico</span><div class="flex" style="gap:8px"><button class="btn btn-ghost btn-sm" onclick="calcDose('${pet.id}')">${ic('financeiro',14)} Calc. dose</button><button class="btn btn-soft btn-sm" onclick="abrirNovoAtendimento('${pet.id}')">${ic('plus',14)} Novo atendimento</button></div></div>
    <div class="flex-col" style="gap:12px">${hist.length?hist.map(h=>`
      <div class="card card-pad" style="border-left:3px solid var(--brand)">
        <div class="between" style="margin-bottom:8px"><b>${ddmmyy(h.data)}</b><span class="t-sub">${profOf(h.profId)?.nome||''} · ${h.peso}kg · ${h.temp}°C</span></div>
@@ -1192,7 +1208,7 @@ function renderPetModal(pet,cliente){
      </div>`).join(''):emptyState('prontuario','Sem atendimentos registrados','O histórico clínico aparecerá aqui.')}</div>`;
  } else {
    const vac=pet.vacinas.slice().sort((a,b)=>b.data.localeCompare(a.data));
-   inner=`<div class="between" style="margin-bottom:14px"><span class="t-sub">Carteira de vacinação</span><button class="btn btn-soft btn-sm" onclick="abrirNovaVacina('${pet.id}')">${ic('plus',14)} Registrar vacina</button></div>
+   inner=`<div class="between" style="margin-bottom:14px"><span class="t-sub">Carteira de vacinação</span><div class="flex" style="gap:8px"><button class="btn btn-ghost btn-sm" onclick="imprimirCarteira('${pet.id}')">${ic('print',14)} Carteira</button><button class="btn btn-soft btn-sm" onclick="abrirNovaVacina('${pet.id}')">${ic('plus',14)} Registrar vacina</button></div></div>
    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Vacina</th><th>Aplicada</th><th>Próxima dose</th><th>Lote</th><th>Status</th></tr></thead><tbody>
      ${vac.length?vac.map(v=>{const d=v.proxima?diasEntre(todayISO(),v.proxima):null;return `<tr><td class="t-main">${v.nome}</td><td>${ddmmyy(v.data)}</td><td>${v.proxima?ddmmyy(v.proxima):'—'}</td><td class="t-sub">${v.lote||'—'}</td><td>${d===null?'<span class="tag">única</span>':d<0?`<span class="badge2" style="background:var(--danger-soft);color:var(--danger)">${Math.abs(d)}d atrasada</span>`:d<=15?`<span class="badge2" style="background:var(--gold-soft);color:var(--gold)">em ${d}d</span>`:'<span class="badge2" style="background:var(--ok-soft);color:var(--ok)">em dia</span>'}</td></tr>`;}).join(''):`<tr><td colspan="5">${emptyState('vacina','Nenhuma vacina registrada','Registre a primeira vacina.')}</td></tr>`}
    </tbody></table></div>`;
@@ -1205,6 +1221,49 @@ function renderPetModal(pet,cliente){
    <div class="tabs" style="margin-bottom:18px">${tabs.map(t=>`<button class="${petTab===t?'active':''}" onclick="petTab='${t}';renderPetModal(petOf('${pet.id}').pet,petOf('${pet.id}').cliente)">${lbl[t]}</button>`).join('')}</div>
    ${inner}`;
  openModal({title:'Ficha do pet',body,size:'wide',foot:`<button class="btn btn-ghost" style="margin-right:auto" onclick="closeModal();emitirDocumento('${pet.id}')">${ic('doc',14)} Emitir documento</button><button class="btn btn-soft" onclick="closeModal();verPortal('${pet.id}')">${ic('user',14)} Portal do tutor</button><button class="btn btn-primary" onclick="closeModal();openNovoAgend({petId:'${pet.id}'})">${ic('agenda',14)} Agendar</button>`});
+}
+const DOSE_PRESETS={'':0,'Amoxicilina (10 mg/kg)':10,'Dipirona (25 mg/kg)':25,'Meloxicam (0,1 mg/kg)':0.1,'Carprofeno (4 mg/kg)':4,'Metronidazol (15 mg/kg)':15,'Enrofloxacina (5 mg/kg)':5,'Prednisolona (0,5 mg/kg)':0.5,'Tramadol (3 mg/kg)':3,'Omeprazol (1 mg/kg)':1};
+function curvaPesoSVG(pet){
+ const pts=pet.prontuario.filter(h=>h.peso).map(h=>({data:h.data,peso:+h.peso})).sort((a,b)=>a.data.localeCompare(b.data));
+ if(pts.length<2)return '';
+ const W=520,H=150,pad=30;
+ const min=Math.min(...pts.map(p=>p.peso)),max=Math.max(...pts.map(p=>p.peso)),range=(max-min)||1;
+ const x=i=>pad+i*(W-pad*2)/(pts.length-1);
+ const y=v=>H-pad-((v-min)/range)*(H-pad*2);
+ const line=pts.map((p,i)=>`${i?'L':'M'}${x(i).toFixed(1)},${y(p.peso).toFixed(1)}`).join(' ');
+ const area=`M${x(0)},${H-pad} `+pts.map((p,i)=>`L${x(i).toFixed(1)},${y(p.peso).toFixed(1)}`).join(' ')+` L${x(pts.length-1).toFixed(1)},${H-pad} Z`;
+ const dots=pts.map((p,i)=>`<circle cx="${x(i).toFixed(1)}" cy="${y(p.peso).toFixed(1)}" r="3.5" fill="var(--brand)"/><text x="${x(i).toFixed(1)}" y="${(y(p.peso)-8).toFixed(1)}" font-size="9" font-weight="700" text-anchor="middle" fill="var(--ink-2)">${p.peso}</text>`).join('');
+ const labels=pts.map((p,i)=>`<text x="${x(i).toFixed(1)}" y="${H-9}" font-size="8.5" text-anchor="middle" fill="var(--muted)">${ddmm(p.data)}</text>`).join('');
+ return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto"><defs><linearGradient id="pesoG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--brand)" stop-opacity=".18"/><stop offset="1" stop-color="var(--brand)" stop-opacity="0"/></linearGradient></defs><path d="${area}" fill="url(#pesoG)"/><path d="${line}" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>${dots}${labels}</svg>`;
+}
+function imprimirCarteira(petId){
+ const r=petOf(petId);if(!r)return;const{pet,cliente}=r;const e=db.empresa;
+ const w=window.open('','_blank','width=820,height=900');if(!w){toast('Permita pop-ups para imprimir','err');return;}
+ const linhas=pet.vacinas.slice().sort((a,b)=>b.data.localeCompare(a.data)).map(v=>`<tr><td>${v.nome}</td><td>${ddmmyy(v.data)}</td><td>${v.proxima?ddmmyy(v.proxima):'—'}</td><td>${v.lote||'—'}</td><td>${profOf(v.profId)?profOf(v.profId).nome:'—'}</td></tr>`).join('')||'<tr><td colspan="5" style="text-align:center;color:#999">Nenhuma vacina registrada</td></tr>';
+ w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Carteira de vacinação — ${pet.nome}</title><style>@page{size:A4;margin:16mm}*{box-sizing:border-box;font-family:Arial,Helvetica,sans-serif}body{color:#15302b;margin:0}.hd{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #12876C;padding-bottom:12px}.nm{font-size:22px;font-weight:bold;color:#0F2E29}.sub{font-size:11.5px;color:#666;line-height:1.5}h1{font-size:16px;text-transform:uppercase;letter-spacing:1px;color:#0F2E29;margin:18px 0 10px}.pet{background:#f5f8f6;border-radius:8px;padding:12px 14px;font-size:13px;margin-bottom:14px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #dcdcdc;padding:8px 10px;font-size:12.5px;text-align:left}th{background:#eef4f2}.ft{margin-top:30px;font-size:11px;color:#777;text-align:center}</style></head><body><div class="hd"><div><div class="nm">${e.nome}</div><div class="sub">${e.end}<br>${e.tel} · CNPJ ${e.cnpj}</div></div><div style="font-size:34px">${especieEmoji(pet.especie)}</div></div><h1>Carteira de Vacinação</h1><div class="pet"><b>Pet:</b> ${pet.nome} (${pet.raca}, ${pet.sexo==='M'?'macho':'fêmea'}, ${idade(pet.nasc)}) &nbsp;·&nbsp; <b>Tutor(a):</b> ${cliente.nome} &nbsp;·&nbsp; <b>Emitida em:</b> ${ddmmyy(todayISO())}</div><table><thead><tr><th>Vacina</th><th>Aplicada</th><th>Próxima dose</th><th>Lote</th><th>Responsável</th></tr></thead><tbody>${linhas}</tbody></table><div class="ft">Documento gerado pelo Vetória · mantenha a carteira sempre atualizada</div></body></html>`);
+ w.document.close();setTimeout(()=>{try{w.print();}catch(e){}},350);
+}
+function calcDose(petId){
+ const r=petId?petOf(petId):null;
+ const peso=r?((r.pet.prontuario.slice().sort((a,b)=>b.data.localeCompare(a.data))[0]||{}).peso||r.pet.peso||''):'';
+ const body=`<div class="frow"><div class="field"><label>Peso do animal (kg)</label><input class="inp" type="number" step="0.1" id="dsPeso" value="${peso}" oninput="recalcDose()"></div>
+   <div class="field"><label>Medicamento (atalho)</label><select class="sel" id="dsPreset" onchange="if(this.value)document.getElementById('dsMgkg').value=this.value;recalcDose()">${Object.entries(DOSE_PRESETS).map(([k,v])=>`<option value="${v||''}">${k||'— escolher —'}</option>`).join('')}</select></div></div>
+   <div class="frow-3"><div class="field"><label>Dose (mg/kg)</label><input class="inp" type="number" step="0.01" id="dsMgkg" oninput="recalcDose()"></div>
+   <div class="field"><label>Concentração</label><input class="inp" type="number" step="0.01" id="dsConc" placeholder="mg/mL ou mg/comp" oninput="recalcDose()"></div>
+   <div class="field"><label>Apresentação</label><select class="sel" id="dsForma" onchange="recalcDose()"><option value="ml">Líquido (mg/mL)</option><option value="comp">Comprimido (mg/comp)</option></select></div></div>
+   <div id="dsRes" style="margin-top:6px"></div>
+   <div class="t-sub" style="margin-top:10px">⚠ Ferramenta de apoio ao cálculo. Confira sempre a bula e a prescrição do veterinário responsável.</div>`;
+ openModal({title:'Calculadora de dose',size:'wide',body,foot:`<button class="btn btn-primary" onclick="closeModal()">Fechar</button>`});
+ setTimeout(recalcDose,30);
+}
+function recalcDose(){
+ const res=$('#dsRes');if(!res)return;
+ const peso=parseFloat($('#dsPeso').value)||0,mgkg=parseFloat($('#dsMgkg').value)||0,conc=parseFloat($('#dsConc').value)||0,forma=$('#dsForma').value;
+ if(!peso||!mgkg){res.innerHTML='<div class="t-sub">Preencha peso e dose para calcular.</div>';return;}
+ const total=peso*mgkg;
+ let det=`<div class="between" style="padding:8px 0"><span class="t-sub">Dose total</span><b>${total.toFixed(1)} mg</b></div>`;
+ if(conc>0){const q=total/conc;det+=`<div class="between" style="padding:8px 0;border-top:1px solid var(--line-2)"><span class="t-sub">Administrar</span><b style="color:var(--brand);font-size:18px">${q.toFixed(2)} ${forma==='ml'?'mL':'comp.'}</b></div>`;}
+ res.innerHTML=`<div class="card card-pad" style="background:var(--brand-tint)">${det}</div>`;
 }
 function abrirNovaVacina(petId){
  const r=petOf(petId);
@@ -1640,6 +1699,80 @@ function salvarProduto(id){
 /* ============================================================
    FINANCEIRO
    ============================================================ */
+const MESES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+let dreMes=new Date().getMonth();
+function maisDias(n){ const d=new Date(); d.setDate(d.getDate()+n); return fmtDate(d); }
+function dadosDRE(M){
+ M=(M==null)?new Date().getMonth():M;
+ const vMes=db.vendas.filter(v=>parseISO(v.data).getMonth()===M);
+ const receitaBruta=vMes.reduce((s,v)=>s+v.total,0);
+ const taxas=db.financeiro.filter(f=>f.tipo==='receita'&&f.taxa&&parseISO(f.data||f.venc).getMonth()===M).reduce((s,f)=>s+(f.valor-(f.liquido!=null?f.liquido:f.valor)),0);
+ let cmv=0; vMes.forEach(v=>(v.itens||[]).forEach(i=>{const p=db.produtos.find(x=>x.nome===i.nome);if(p&&p.tipo==='produto')cmv+=(p.custo||0)*i.qtd;}));
+ const despArr=db.financeiro.filter(f=>f.tipo==='despesa'&&parseISO(f.venc).getMonth()===M);
+ const despPorCat={}; despArr.forEach(f=>{const c=f.cat||'Outros';despPorCat[c]=(despPorCat[c]||0)+f.valor;});
+ const despesas=despArr.reduce((s,f)=>s+f.valor,0);
+ const comissoes=comissoesMes(M).reduce((s,r)=>s+r.com,0);
+ const lucroBruto=receitaBruta-taxas-cmv;
+ const resultado=lucroBruto-despesas-comissoes;
+ return {M,receitaBruta,taxas,cmv,lucroBruto,despPorCat,despesas,comissoes,resultado};
+}
+function comissoesMes(M){ M=(M==null)?new Date().getMonth():M; return db.profissionais.map(pr=>{const ags=db.agendamentos.filter(a=>a.profId===pr.id&&a.status==='finalizado'&&parseISO(a.data).getMonth()===M);const vendas=db.vendas.filter(v=>v.profId===pr.id&&parseISO(v.data).getMonth()===M);const base=ags.reduce((s,a)=>s+a.valor,0)+vendas.reduce((s,v)=>s+v.total,0);return {nome:pr.nome,papel:pr.papel,qt:ags.length+vendas.length,base,pct:pr.comissao,com:base*pr.comissao/100};}); }
+function dadosProjecao(){
+ const hoje=todayISO(); const ev=[];
+ (db.financeiro||[]).forEach(f=>{
+   if(f.tipo==='receita'&&f.pago&&f.liberacao&&f.liberacao>=hoje) ev.push({data:f.liberacao,val:(f.liquido!=null?f.liquido:f.valor)});
+   else if(f.tipo==='receita'&&!f.pago&&f.venc>=hoje) ev.push({data:f.venc,val:f.valor});
+   else if(f.tipo==='despesa'&&!f.pago&&f.venc>=hoje) ev.push({data:f.venc,val:-f.valor});
+ });
+ const saldoIni=db.contas.reduce((s,ct)=>s+saldoConta(ct).disp,0);
+ const semanas=[]; for(let i=0;i<8;i++){semanas.push({i,label:ddmm(maisDias(i*7))+' a '+ddmm(maisDias(i*7+6)),entradas:0,saidas:0});}
+ const alem={entradas:0,saidas:0,cnt:0};
+ ev.forEach(e=>{const d=diasEntre(hoje,e.data);if(d<0)return;const w=Math.floor(d/7);if(w<8){if(e.val>=0)semanas[w].entradas+=e.val;else semanas[w].saidas+=Math.abs(e.val);}else{if(e.val>=0)alem.entradas+=e.val;else alem.saidas+=Math.abs(e.val);alem.cnt++;}});
+ let acc=saldoIni; semanas.forEach(s=>{s.saldo=acc+s.entradas-s.saidas;acc=s.saldo;});
+ return {saldoIni,semanas,alem,acc};
+}
+function csvNum(v){ return (Math.round((v||0)*100)/100).toFixed(2).replace('.',','); }
+function baixarCSV(nome,headers,rows){
+ const esc=v=>{v=(v==null?'':String(v));return /[;"\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+ const csv='\ufeff'+headers.map(esc).join(';')+'\n'+rows.map(r=>r.map(esc).join(';')).join('\n');
+ const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+ const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=nome+'.csv';document.body.appendChild(a);a.click();setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(a.href);},100);
+ toast('Planilha exportada ✓');
+}
+function imprimirRelatorio(titulo,inner){
+ const w=window.open('','_blank'); if(!w){toast('Permita pop-ups para exportar em PDF','err');return;}
+ const emp=(db.config&&db.config.nome)||'Vetória';
+ w.document.write(`<html><head><title>${titulo}</title><meta charset="utf-8"><style>body{font-family:Arial,Helvetica,sans-serif;color:#1a1a1a;padding:30px;max-width:780px;margin:auto}h1{font-size:20px;color:#10463A;margin:4px 0 2px}h2{font-size:14px;margin:18px 0 6px}table{width:100%;border-collapse:collapse;margin:10px 0}th,td{border:1px solid #e2e2e2;padding:7px 9px;font-size:12.5px;text-align:left}th{background:#eef4f2}.num{text-align:right}.tot td{font-weight:700;background:#f5faf8}.sub{color:#777;font-size:11.5px}@media print{body{padding:0}}</style></head><body><div class="sub">${emp} · emitido em ${ddmmyy(todayISO())}</div><h1>${titulo}</h1>${inner}<div class="sub" style="margin-top:24px">Gerado pelo Vetória</div></body></html>`);
+ w.document.close(); setTimeout(()=>{try{w.focus();w.print();}catch(e){}},350);
+}
+function exportarDRE(fmt){
+ const d=dadosDRE(dreMes); const mn=MESES[d.M];
+ if(fmt==='csv'){
+   const rows=[['Receita bruta (vendas)',csvNum(d.receitaBruta)],['(-) Taxas cartao/maquininha',csvNum(-d.taxas)],['(-) CMV',csvNum(-d.cmv)],['= Lucro bruto',csvNum(d.lucroBruto)]];
+   Object.entries(d.despPorCat).forEach(([c,v])=>rows.push(['(-) '+c,csvNum(-v)]));
+   rows.push(['(-) Despesas operacionais (total)',csvNum(-d.despesas)],['(-) Comissoes',csvNum(-d.comissoes)],['= Resultado liquido',csvNum(d.resultado)]);
+   baixarCSV('DRE_'+mn,['Conta','Valor (R$)'],rows);
+ } else {
+   const tr=(l,v,neg,tot)=>`<tr class="${tot?'tot':''}"><td>${l}</td><td class="num">${neg?'− ':''}${BRL(Math.abs(v))}</td></tr>`;
+   let inner=`<h2>${mn}</h2><table><tbody>`;
+   inner+=tr('Receita bruta (vendas)',d.receitaBruta);
+   inner+=tr('(−) Taxas de cartão/maquininha',d.taxas,1);
+   inner+=tr('(−) Custo das mercadorias (CMV)',d.cmv,1);
+   inner+=tr('= Lucro bruto',d.lucroBruto,0,1);
+   Object.entries(d.despPorCat).forEach(([c,v])=>inner+=tr('(−) '+c,v,1));
+   inner+=tr('(−) Comissões da equipe',d.comissoes,1);
+   inner+=tr('= Resultado líquido',d.resultado,0,1);
+   inner+='</tbody></table>';
+   imprimirRelatorio('DRE — '+mn,inner);
+ }
+}
+function exportarProjecao(){ const pj=dadosProjecao(); baixarCSV('Projecao_caixa',['Semana','Entradas','Saidas','Resultado','Saldo projetado'],pj.semanas.map(w=>[w.label,csvNum(w.entradas),csvNum(w.saidas),csvNum(w.entradas-w.saidas),csvNum(w.saldo)])); }
+function exportarComissoes(fmt){
+ const M=new Date().getMonth(); const rows=comissoesMes(M);
+ if(fmt==='csv'){ baixarCSV('Comissoes_'+MESES[M],['Profissional','Funcao','Atendimentos','Base','%','Comissao'],rows.map(r=>[r.nome,r.papel,r.qt,csvNum(r.base),r.pct+'%',csvNum(r.com)])); }
+ else { let inner=`<h2>${MESES[M]}</h2><table><thead><tr><th>Profissional</th><th>Função</th><th class="num">Atend.</th><th class="num">Base</th><th class="num">%</th><th class="num">Comissão</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.nome}</td><td>${r.papel}</td><td class="num">${r.qt}</td><td class="num">${BRL(r.base)}</td><td class="num">${r.pct}%</td><td class="num">${BRL(r.com)}</td></tr>`).join('')}<tr class="tot"><td colspan="5" class="num">Total</td><td class="num">${BRL(rows.reduce((s,r)=>s+r.com,0))}</td></tr></tbody></table>`; imprimirRelatorio('Comissões — '+MESES[M],inner); }
+}
+function exportarRecebiveis(){ const rec=(db.financeiro||[]).filter(f=>f.tipo==='receita'&&f.pago&&f.liberacao&&f.liberacao>todayISO()).sort((a,b)=>a.liberacao.localeCompare(b.liberacao)); baixarCSV('Recebiveis_a_liberar',['Libera em','Origem','Forma','Conta','Bruto','Liquido'],rec.map(f=>[ddmmyy(f.liberacao),f.desc||'',f.forma||'',contaOf(f.contaId)?contaOf(f.contaId).nome:'',csvNum(f.valor),csvNum(f.liquido!=null?f.liquido:f.valor)])); }
 let finTab='fluxo';
 function renderFinanceiro(){
  const M=new Date().getMonth();
@@ -1661,6 +1794,8 @@ function renderFinanceiro(){
  </div>
  <div class="tabs">
    <button class="${finTab==='fluxo'?'active':''}" onclick="finTab='fluxo';renderFinanceiro()">Fluxo de caixa</button>
+   <button class="${finTab==='projecao'?'active':''}" onclick="finTab='projecao';renderFinanceiro()">Projeção</button>
+   <button class="${finTab==='dre'?'active':''}" onclick="finTab='dre';renderFinanceiro()">DRE</button>
    <button class="${finTab==='receber'?'active':''}" onclick="finTab='receber';renderFinanceiro()">A receber</button>
    <button class="${finTab==='pagar'?'active':''}" onclick="finTab='pagar';renderFinanceiro()">A pagar</button>
    <button class="${finTab==='caixa'?'active':''}" onclick="finTab='caixa';renderFinanceiro()">Caixa do dia</button>
@@ -1677,6 +1812,42 @@ function renderFinBody(){
    box.innerHTML=`<div class="card"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Vencimento</th><th>Descrição</th><th>Categoria</th><th>Status</th><th class="num">Valor</th></tr></thead><tbody>
      ${list.map(f=>`<tr><td>${ddmm(f.venc)}</td><td class="t-main">${f.desc}</td><td><span class="tag">${f.cat}</span></td><td>${f.pago?'<span class="badge2" style="background:var(--ok-soft);color:var(--ok)">pago</span>':'<span class="badge2" style="background:var(--gold-soft);color:var(--gold)">pendente</span>'}</td><td class="num" style="color:${f.tipo==='receita'?'var(--ok)':'var(--danger)'};font-weight:700">${f.tipo==='receita'?'+':'−'} ${BRL(f.valor)}</td></tr>`).join('')}
    </tbody></table></div></div>`;
+ } else if(finTab==='dre'){
+   const d=dadosDRE(dreMes);
+   const linha=(lb,v,opt)=>`<tr class="${opt&&opt.tot?'':''}" style="${opt&&opt.tot?'background:var(--surface-2);font-weight:700':''}"><td style="${opt&&opt.ind?'padding-left:26px;color:var(--muted)':''}">${lb}</td><td class="num" style="color:${opt&&opt.neg?'var(--danger)':opt&&opt.tot&&v<0?'var(--danger)':opt&&opt.tot?'var(--brand)':''}">${opt&&opt.neg?'− ':''}${BRL(Math.abs(v))}</td></tr>`;
+   const despCat=Object.entries(d.despPorCat).sort((a,b)=>b[1]-a[1]);
+   box.innerHTML=`<div class="card"><div class="card-head"><h3>DRE — Demonstrativo de Resultado</h3><div class="sp"></div>
+     <select class="sel" style="max-width:150px;margin-right:8px" onchange="dreMes=parseInt(this.value);renderFinanceiro()">${MESES.map((m,i)=>`<option value="${i}" ${i===dreMes?'selected':''}>${m}</option>`).join('')}</select>
+     <button class="btn btn-ghost btn-sm" onclick="exportarDRE('pdf')">${ic('doc',13)} PDF</button> <button class="btn btn-soft btn-sm" onclick="exportarDRE('csv')">${ic('download',13)} Excel</button></div>
+     <div class="tbl-wrap"><table class="tbl">
+       <tbody>
+         ${linha('Receita bruta (vendas do mês)',d.receitaBruta)}
+         ${linha('(−) Taxas de cartão/maquininha',d.taxas,{ind:1,neg:1})}
+         ${linha('(−) Custo das mercadorias vendidas (CMV)',d.cmv,{ind:1,neg:1})}
+         ${linha('= Lucro bruto',d.lucroBruto,{tot:1})}
+         ${despCat.map(([c,v])=>linha('(−) '+c,v,{ind:1,neg:1})).join('')}
+         ${linha('(−) Despesas operacionais (total)',d.despesas,{neg:1})}
+         ${linha('(−) Comissões da equipe',d.comissoes,{ind:1,neg:1})}
+         ${linha('= Resultado líquido',d.resultado,{tot:1})}
+       </tbody></table></div>
+     <div class="card-pad" style="border-top:1px solid var(--line-2)"><div class="t-sub">Margem líquida: <b style="color:${d.resultado>=0?'var(--ok)':'var(--danger)'}">${d.receitaBruta?(d.resultado/d.receitaBruta*100).toFixed(1):'0'}%</b> · base: faturamento de vendas, custos do catálogo, despesas lançadas e comissões.</div></div>
+   </div>`;
+ } else if(finTab==='projecao'){
+   const pj=dadosProjecao();
+   box.innerHTML=`
+     <div class="kpis" style="margin-bottom:16px">
+       ${kpi('money','teal','Saldo hoje (contas)',BRL(pj.saldoIni))}
+       ${kpi('financeiro','ok','Entradas previstas (8 sem)',BRL(pj.semanas.reduce((s,w)=>s+w.entradas,0)))}
+       ${kpi('clock','coral','Saídas previstas (8 sem)',BRL(pj.semanas.reduce((s,w)=>s+w.saidas,0)))}
+       ${kpi('relatorio',pj.acc>=0?'gold':'danger','Saldo projetado',BRL(pj.acc))}
+     </div>
+     <div class="card"><div class="card-head"><h3>Projeção de caixa — próximas 8 semanas</h3><div class="sp"></div><button class="btn btn-soft btn-sm" onclick="exportarProjecao()">${ic('download',13)} Excel</button></div>
+     <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Semana</th><th class="num">Entradas</th><th class="num">Saídas</th><th class="num">Resultado</th><th class="num">Saldo projetado</th></tr></thead><tbody>
+       ${pj.semanas.map(w=>{const res=w.entradas-w.saidas;return `<tr><td class="t-main">${w.label}</td><td class="num" style="color:var(--ok)">${w.entradas?'+ '+BRL(w.entradas):'—'}</td><td class="num" style="color:var(--danger)">${w.saidas?'− '+BRL(w.saidas):'—'}</td><td class="num" style="color:${res>=0?'var(--ok)':'var(--danger)'}">${BRL(res)}</td><td class="num"><b style="color:${w.saldo>=0?'var(--brand)':'var(--danger)'}">${BRL(w.saldo)}</b></td></tr>`;}).join('')}
+     </tbody></table></div>
+     ${pj.semanas.some(w=>w.saldo<0)?`<div class="card-pad" style="background:var(--danger-soft);color:var(--danger);font-size:13px;display:flex;gap:8px;align-items:center">${ic('alert',16)} Atenção: o caixa fica negativo em alguma semana. Antecipe recebíveis ou renegocie pagamentos.</div>`:''}
+     ${pj.alem.cnt?`<div class="card-pad t-sub">+ ${pj.alem.cnt} lançamento(s) além de 8 semanas: ${BRL(pj.alem.entradas)} a entrar, ${BRL(pj.alem.saidas)} a sair.</div>`:''}
+     </div>`;
  } else if(finTab==='receber'||finTab==='pagar'){
    const tipo=finTab==='receber'?'receita':'despesa';
    const list=db.financeiro.filter(f=>f.tipo===tipo&&!f.pago).sort((a,b)=>a.venc.localeCompare(b.venc));
@@ -1724,7 +1895,7 @@ function renderFinBody(){
        </div>`).join('')}
        <button class="card card-pad" style="border:2px dashed var(--line);display:grid;place-items:center;cursor:pointer;color:var(--muted);min-height:110px" onclick="novaConta()">${ic('plus',20)}<span style="font-size:12px;margin-top:4px">Nova conta</span></button>
      </div>
-     ${recebiveis.length?`<div class="card" style="margin-bottom:18px"><div class="card-head"><h3>${ic('clock',17)} Recebíveis a liberar</h3><div class="sp"></div><span class="t-sub">${recebiveis.length} parcela(s) · ${BRL(totRecebiveis)} líquidos</span></div>
+     ${recebiveis.length?`<div class="card" style="margin-bottom:18px"><div class="card-head"><h3>${ic('clock',17)} Recebíveis a liberar</h3><div class="sp"></div><span class="t-sub">${recebiveis.length} parcela(s) · ${BRL(totRecebiveis)} líquidos</span> <button class="btn btn-soft btn-sm" onclick="exportarRecebiveis()">${ic('download',13)} Excel</button></div>
      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Libera em</th><th>Origem</th><th>Forma</th><th>Conta</th><th class="num">Bruto</th><th class="num">Líquido</th><th></th></tr></thead><tbody>
        ${recebiveis.slice(0,40).map(f=>{const d=diasEntre(todayISO(),f.liberacao);return `<tr>
          <td>${ddmmyy(f.liberacao)}<div class="t-sub">em ${d}d</div></td>
@@ -1755,7 +1926,7 @@ function renderFinBody(){
      const base=ags.reduce((s,a)=>s+a.valor,0)+vendas.reduce((s,v)=>s+v.total,0);
      return{pr,base,qt:ags.length+vendas.length,com:base*pr.comissao/100};
    });
-   box.innerHTML=`<div class="card"><div class="card-head"><h3>Comissões do mês</h3><div class="sp"></div><span class="t-sub">Calculadas sobre atendimentos finalizados e vendas</span></div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Profissional</th><th>Função</th><th class="num">Atendimentos</th><th class="num">Base</th><th class="num">%</th><th class="num">Comissão</th></tr></thead><tbody>
+   box.innerHTML=`<div class="card"><div class="card-head"><h3>Comissões do mês</h3><div class="sp"></div><button class="btn btn-ghost btn-sm" onclick="exportarComissoes('pdf')">${ic('doc',13)} PDF</button> <button class="btn btn-soft btn-sm" onclick="exportarComissoes('csv')">${ic('download',13)} Excel</button></div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Profissional</th><th>Função</th><th class="num">Atendimentos</th><th class="num">Base</th><th class="num">%</th><th class="num">Comissão</th></tr></thead><tbody>
      ${rows.map(r=>`<tr><td>${profPill(r.pr.id)}</td><td class="t-sub">${r.pr.papel}</td><td class="num">${r.qt}</td><td class="num">${BRL(r.base)}</td><td class="num t-sub">${r.pr.comissao}%</td><td class="num"><b>${BRL(r.com)}</b></td></tr>`).join('')}
    </tbody><tfoot><tr style="background:var(--surface-2)"><td colspan="5" style="text-align:right;padding:13px 16px"><b>Total em comissões</b></td><td class="num" style="padding:13px 16px"><b style="color:var(--brand)">${BRL(rows.reduce((s,r)=>s+r.com,0))}</b></td></tr></tfoot></table></div></div>`;
  }
@@ -1929,7 +2100,7 @@ function renderCfgBody(){
 
        ${matrizPermsHTML()}`;
    } else {
-     box.innerHTML=`<div style="padding:12px 14px;background:var(--gold-soft);border-radius:12px;margin-bottom:16px;font-size:13px;display:flex;align-items:center;gap:9px">${ic('alert',16)} <span>A gestão de equipe (convites e perfis) funciona no modo nuvem, com login. No modo demonstração os perfis abaixo são apenas ilustrativos.</span></div>
+     box.innerHTML=`<div style="padding:12px 14px;background:var(--gold-soft);border-radius:12px;margin-bottom:16px;font-size:13px;display:flex;align-items:center;gap:9px">${ic('alert',16)} <span>A gestão de equipe (convites e perfis) fica disponível quando você está logado na sua clínica.</span></div>
        ${matrizPermsHTML()}`;
    }
  } else if(cfgTab==='catalogo'){
@@ -1997,6 +2168,7 @@ async function carregarClinica(){
     if(e1) throw e1;
     if(!membros||!membros.length) return false;
     membroAtual=membros[0]; clinicaAtual=membroAtual.clinica_id;
+    try{ const { data:clRow } = await sb.from('clinicas').select('plano,status,trial_fim,nome').eq('id',clinicaAtual).single(); if(clRow){ assinatura={plano:clRow.plano||'trial',status:clRow.status||'trial',trial_fim:clRow.trial_fim||null}; } }catch(e){ console.warn('assinatura',e); }
     db.usuarios=[{ id:user.id, nome:membroAtual.nome||user.email, perfil:membroAtual.papel||'dono', email:user.email }];
     const { data:cls, error:e2 } = await sb.from('clientes').select('*').eq('clinica_id',clinicaAtual);
     if(e2) throw e2;
@@ -2130,7 +2302,6 @@ function renderAuth(modo){ modo=modo||'login';
       <button class="btn btn-primary" style="width:100%;margin-top:6px" id="auBtn" onclick="${modo==='login'?'fazerLogin()':'fazerCadastro()'}">${modo==='login'?'Entrar':'Criar conta'}</button>
       <div style="text-align:center;margin-top:14px;font-size:13px">${modo==='login'?`Não tem conta? <a href="#" onclick="renderAuth('signup');return false" style="color:var(--brand);font-weight:600">Cadastrar</a>`:`Já tem conta? <a href="#" onclick="renderAuth('login');return false" style="color:var(--brand);font-weight:600">Entrar</a>`}</div>
       ${modo==='login'?`<div style="text-align:center;margin-top:8px;font-size:12.5px"><a href="#" onclick="renderRecuperar();return false" class="t-sub" style="text-decoration:underline">Esqueci minha senha</a></div>`:''}
-      <div style="text-align:center;margin-top:18px;border-top:1px solid var(--line-2);padding-top:14px"><a href="#" onclick="entrarDemo();return false" class="t-sub" style="text-decoration:underline">Entrar em modo demonstração</a></div>
     </div></div>`;
 }
 function renderSplash(msg){
@@ -2145,7 +2316,6 @@ function renderErroConexao(){
    <b style="font-size:16px">Sem conexão com o servidor</b>
    <div class="t-sub" style="margin:8px 0 16px">Verifique sua internet e tente novamente.</div>
    <button class="btn btn-primary" onclick="iniciar()">Tentar novamente</button>
-   <div style="margin-top:10px"><a href="#" onclick="entrarDemo();return false" class="t-sub" style="text-decoration:underline">Entrar em modo demonstração</a></div>
  </div></div>`;
 }
 function renderRecuperar(){
@@ -2198,6 +2368,22 @@ function renderOnboarding(){ $('#app').innerHTML=`<div style="min-height:100vh;d
     </div></div>`; }
 async function criarClinica(){ const nome=$('#obNome').value.trim(),meu=$('#obMeu').value.trim(); if(!nome){toast('Informe o nome da clínica','err');return;} $('#obBtn').textContent='Criando…';
   try{ const {error}=await sb.rpc('criar_clinica',{p_nome:nome,p_meu_nome:meu||null}); if(error)throw error; sessionStorage.removeItem('vet_nome'); iniciar(); }catch(err){ toast(err.message||'Falha ao criar clínica','err'); if($('#obBtn'))$('#obBtn').textContent='Criar e começar'; } }
+function renderBloqueioTrial(){
+ $('#app').innerHTML=`<div style="min-height:100vh;display:grid;place-items:center;background:var(--bg);padding:20px"><div class="card" style="max-width:430px;padding:32px 28px;text-align:center">
+   <div style="width:56px;height:56px;border-radius:16px;background:var(--gold-soft);color:var(--gold);display:grid;place-items:center;margin:0 auto 14px">${ic('clock',28)}</div>
+   <div style="font-family:'Plus Jakarta Sans';font-weight:800;font-size:20px;margin-bottom:6px">Seu teste grátis terminou</div>
+   <div class="t-sub" style="margin-bottom:20px">Os 7 dias de avaliação do Vetória chegaram ao fim. Assine para continuar com todos os recursos e seus dados intactos.</div>
+   <button class="btn btn-primary" style="width:100%" onclick="assinarAgora()">${ic('check',15)} Assinar o Vetória</button>
+   <div style="margin-top:12px"><a href="#" onclick="if(confirm('Sair da conta?'))sairConta();return false" class="t-sub" style="text-decoration:underline">Sair da conta</a></div>
+ </div></div>`;
+}
+function assinarAgora(){ toast('Assinatura em breve — em instantes ligamos o pagamento aqui.'); }
+function trialBannerHTML(){
+ if(!supaOn()||assinatura.status!=='trial')return '';
+ const d=diasTrial(); if(d===null||d<0)return '';
+ const urgente=d<=2;
+ return `<div style="display:flex;align-items:center;gap:10px;padding:9px 16px;background:${urgente?'var(--danger-soft)':'var(--gold-soft)'};color:${urgente?'var(--danger)':'#9a6b00'};font-size:13px;font-weight:600;border-bottom:1px solid var(--line-2)">${ic('clock',15)}<span>Teste grátis: ${d===0?'último dia':'faltam '+d+' dia'+(d>1?'s':'')}.</span><button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="assinarAgora()">Assinar agora</button></div>`;
+}
 function entrarDemo(){ modoDemo=true; renderShell(); go('dash'); }
 
 // ---- gestão de equipe ----
@@ -2248,6 +2434,7 @@ async function iniciar(){
     try{ temClinica=await carregarClinica(); }
     catch(e){ console.error('carregarClinica',e); renderErroConexao(); return; }
     if(!temClinica){ renderOnboarding(); return; }
+    if(!acessoLiberado()){ renderBloqueioTrial(); return; }
   }
   renderShell(); go('dash');
   if(location.hash.startsWith('#portal/')){ openPortalOverlay(location.hash.split('/')[1],true); }
@@ -2338,6 +2525,18 @@ function excluirDocumento(id){db.documentos=db.documentos.filter(x=>x.id!==id);s
 function imprimirDocumento(id){
  const d=db.documentos.find(x=>x.id===id);if(!d)return;const r=petOf(d.petId);const e=db.empresa;const p=profOf(d.profId);const t=TIPO_DOC[d.tipo];
  const w=window.open('','_blank','width=820,height=900');if(!w){toast('Permita pop-ups para imprimir','err');return;}
+ const especial=d.tipo==='receita_especial';
+ const idBox=especial?`<div class="idbox"><b>IDENTIFICAÇÃO DO COMPRADOR</b><br>Nome: ${r?r.cliente.nome:''} &nbsp;·&nbsp; CPF/RG: __________________ &nbsp;·&nbsp; Tel: ${r?r.cliente.tel:''}<br>Endereço: ${r?(r.cliente.end||'__________________________'):'__________________________'}</div><div class="idbox"><b>IDENTIFICAÇÃO DO FORNECEDOR (FARMÁCIA)</b><br>Nome: __________________________ &nbsp;·&nbsp; Data: ___/___/______<br>Assinatura do responsável: __________________________</div>`:'';
+ const via=(label)=>`
+   ${label?`<div class="viab">${label}</div>`:''}
+   <div class="hd"><div><div class="nm">${e.nome}</div><div class="sub">${e.end}<br>${e.tel} · ${e.email} · CNPJ ${e.cnpj}</div></div><div class="badge">${t.lbl}</div></div>
+   <h1>${t.lbl}</h1>
+   <div class="pet"><b>Paciente:</b> ${r?r.pet.nome:''} (${r?r.pet.raca:''}, ${r&&r.pet.sexo==='M'?'macho':'fêmea'}, ${r?idade(r.pet.nasc):''}) &nbsp;·&nbsp; <b>Tutor(a):</b> ${r?r.cliente.nome:''} &nbsp;·&nbsp; <b>Data:</b> ${ddmmyy(d.data)}</div>
+   <div class="body">${d.conteudo.replace(/</g,'&lt;')}</div>
+   ${idBox}
+   <div class="ft"><div class="qr">${pseudoQR(d.cod)}Código de verificação<br><span class="cod">${d.cod}</span></div>
+     <div class="ass"><div class="line"></div>${p?p.nome:''}${p&&p.crmv?'<br>CRMV '+p.crmv:''}</div></div>`;
+ const conteudo=especial?(via('1ª via — Farmácia')+'<div class="pgbreak"></div>'+via('2ª via — Paciente')):via('');
  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${t.lbl} — ${r?r.pet.nome:''}</title>
    <style>@page{size:A4;margin:18mm}*{box-sizing:border-box;font-family:Georgia,'Times New Roman',serif}body{color:#15302b;margin:0}
    .hd{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #12876C;padding-bottom:14px;margin-bottom:6px}
@@ -2345,18 +2544,13 @@ function imprimirDocumento(id){
    .badge{font-family:Arial;font-size:11px;background:#E2F1EC;color:#0B5746;padding:6px 12px;border-radius:20px;font-weight:bold;text-transform:uppercase;letter-spacing:1px}
    h1{font-size:18px;margin:24px 0 4px;font-family:Arial;text-transform:uppercase;letter-spacing:1px;color:#0F2E29}
    .pet{font-family:Arial;font-size:13px;color:#333;margin-bottom:20px;background:#f5f8f6;padding:12px 14px;border-radius:8px}
-   .body{white-space:pre-line;font-size:15px;line-height:1.9;min-height:300px}
-   .ft{margin-top:50px;display:flex;justify-content:space-between;align-items:flex-end;border-top:1px solid #ddd;padding-top:16px}
+   .body{white-space:pre-line;font-size:15px;line-height:1.9;min-height:200px}
+   .idbox{font-family:Arial;font-size:11.5px;border:1px solid #bbb;border-radius:6px;padding:10px 12px;margin-top:12px;line-height:2}
+   .viab{font-family:Arial;font-size:11px;font-weight:bold;color:#b00020;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+   .ft{margin-top:40px;display:flex;justify-content:space-between;align-items:flex-end;border-top:1px solid #ddd;padding-top:16px}
    .qr{text-align:center;font-family:Arial;font-size:11px;color:#666}.qr svg{display:block;margin:0 auto 4px}
    .ass{text-align:center;font-family:Arial;font-size:13px}.ass .line{border-top:1px solid #333;width:280px;margin:50px auto 6px}
-   .cod{font-family:monospace;font-weight:bold}</style></head><body>
-   <div class="hd"><div><div class="nm">${e.nome}</div><div class="sub">${e.end}<br>${e.tel} · ${e.email} · CNPJ ${e.cnpj}</div></div><div class="badge">${t.lbl}</div></div>
-   <h1>${t.lbl}</h1>
-   <div class="pet"><b>Paciente:</b> ${r?r.pet.nome:''} (${r?r.pet.raca:''}, ${r&&r.pet.sexo==='M'?'macho':'fêmea'}, ${r?idade(r.pet.nasc):''}) &nbsp;·&nbsp; <b>Tutor(a):</b> ${r?r.cliente.nome:''} &nbsp;·&nbsp; <b>Data:</b> ${ddmmyy(d.data)}</div>
-   <div class="body">${d.conteudo.replace(/</g,'&lt;')}</div>
-   <div class="ft"><div class="qr">${pseudoQR(d.cod)}Código de verificação<br><span class="cod">${d.cod}</span></div>
-     <div class="ass"><div class="line"></div>${p?p.nome:''}${p&&p.crmv?'<br>CRMV '+p.crmv:''}</div></div>
-   </body></html>`);
+   .cod{font-family:monospace;font-weight:bold}.pgbreak{page-break-before:always;height:0}</style></head><body>${conteudo}</body></html>`);
  w.document.close();setTimeout(()=>{try{w.print();}catch(e){}},350);
 }
 
@@ -2554,27 +2748,53 @@ const TIPO_MSG={
  retorno:{lbl:'Pós-atendimento',ic:'stethoscope',cor:'var(--brand)'}
 };
 function primeiro(n){return (n||'').split(' ')[0];}
+function msgTpl(tipo){ return (db.config&&db.config.msgTemplates&&db.config.msgTemplates[tipo])||MSG_TPL_PADRAO[tipo]; }
+function aplicarVars(tpl,v){ return (tpl||'').replace(/\{tutor\}/g,v.tutor||'').replace(/\{pet\}/g,v.pet||'').replace(/\{hora\}/g,v.hora||'').replace(/\{data\}/g,v.data||'').replace(/\{servico\}/g,v.servico||'').replace(/\{vacina\}/g,v.vacina||'').replace(/\{clinica\}/g,v.clinica||'').replace(/\{situacao\}/g,v.situacao||''); }
 function mensagensDoDia(){
- const out=[];const hoje=todayISO();const amanha=fmtDate(new Date(Date.now()+864e5));const ontem=fmtDate(new Date(Date.now()-864e5));
+ const out=[];const hoje=todayISO();
+ const dias=(db.config&&db.config.msgDiasConsulta)||1;
+ const alvo=fmtDate(new Date(Date.now()+dias*864e5));const ontem=fmtDate(new Date(Date.now()-864e5));
  const emp=db.empresa.nome;
- // confirmar hoje
- db.agendamentos.filter(a=>a.data===hoje&&a.status==='agendado').forEach(a=>{const r=petOf(a.petId);if(!r)return;out.push({id:'m'+a.id+'c',tipo:'confirmacao',clienteId:r.cliente.id,tel:r.cliente.tel,nome:r.cliente.nome,pet:r.pet.nome,texto:`Oi ${primeiro(r.cliente.nome)}! Confirmando o atendimento do(a) ${r.pet.nome} hoje às ${a.hora} na ${emp}. Podemos confirmar? 🐾`});});
- // lembrete amanhã
- db.agendamentos.filter(a=>a.data===amanha&&['agendado','confirmado'].includes(a.status)).forEach(a=>{const r=petOf(a.petId);if(!r)return;out.push({id:'m'+a.id+'l',tipo:'lembrete',clienteId:r.cliente.id,tel:r.cliente.tel,nome:r.cliente.nome,pet:r.pet.nome,texto:`Olá ${primeiro(r.cliente.nome)}! Passando para lembrar do atendimento do(a) ${r.pet.nome} amanhã às ${a.hora} (${a.servicoNome}) na ${emp}. Até lá! 🐶`});});
- // vacina
- vacinasPendentes().slice(0,8).forEach(v=>{out.push({id:'m'+v.vac.id,tipo:'vacina',clienteId:v.cliente.id,tel:v.cliente.tel,nome:v.cliente.nome,pet:v.pet.nome,texto:`Oi ${primeiro(v.cliente.nome)}! A vacina ${v.vac.nome} do(a) ${v.pet.nome} ${v.dias<0?'está atrasada':'está prevista para '+ddmmyy(v.vac.proxima)}. Vamos agendar? 💉`});});
- // aniversário (tutor) hoje
- db.clientes.filter(c=>{if(!c.nasc)return false;const n=parseISO(c.nasc),t=new Date();return n.getDate()===t.getDate()&&n.getMonth()===t.getMonth();}).forEach(c=>out.push({id:'mb'+c.id,tipo:'aniversario',clienteId:c.id,tel:c.tel,nome:c.nome,pet:'',texto:`Feliz aniversário, ${primeiro(c.nome)}! 🎉 A equipe da ${emp} deseja um dia incrível para você e seu pet. Conte com a gente! 🐾`}));
- // pós-atendimento (ontem finalizado)
- db.agendamentos.filter(a=>a.data===ontem&&a.status==='finalizado').forEach(a=>{const r=petOf(a.petId);if(!r)return;out.push({id:'m'+a.id+'r',tipo:'retorno',clienteId:r.cliente.id,tel:r.cliente.tel,nome:r.cliente.nome,pet:r.pet.nome,texto:`Oi ${primeiro(r.cliente.nome)}! Como está o(a) ${r.pet.nome} depois do atendimento de ontem? Qualquer dúvida estamos à disposição. 💚`});});
+ db.agendamentos.filter(a=>a.data===hoje&&a.status==='agendado').forEach(a=>{const r=petOf(a.petId);if(!r)return;out.push({id:'m'+a.id+'c',tipo:'confirmacao',clienteId:r.cliente.id,tel:r.cliente.tel,nome:r.cliente.nome,pet:r.pet.nome,texto:aplicarVars(msgTpl('confirmacao'),{tutor:primeiro(r.cliente.nome),pet:r.pet.nome,hora:a.hora,data:'hoje',servico:a.servicoNome,clinica:emp})});});
+ db.agendamentos.filter(a=>a.data===alvo&&['agendado','confirmado'].includes(a.status)).forEach(a=>{const r=petOf(a.petId);if(!r)return;out.push({id:'m'+a.id+'l',tipo:'lembrete',clienteId:r.cliente.id,tel:r.cliente.tel,nome:r.cliente.nome,pet:r.pet.nome,texto:aplicarVars(msgTpl('lembrete'),{tutor:primeiro(r.cliente.nome),pet:r.pet.nome,hora:a.hora,data:dias===1?'amanhã':ddmm(a.data),servico:a.servicoNome,clinica:emp})});});
+ vacinasPendentes().slice(0,12).forEach(v=>{out.push({id:'m'+v.vac.id,tipo:'vacina',clienteId:v.cliente.id,tel:v.cliente.tel,nome:v.cliente.nome,pet:v.pet.nome,texto:aplicarVars(msgTpl('vacina'),{tutor:primeiro(v.cliente.nome),pet:v.pet.nome,vacina:v.vac.nome,clinica:emp,situacao:v.dias<0?'está atrasada':'está prevista para '+ddmmyy(v.vac.proxima)})});});
+ db.clientes.filter(c=>{if(!c.nasc)return false;const n=parseISO(c.nasc),t=new Date();return n.getDate()===t.getDate()&&n.getMonth()===t.getMonth();}).forEach(c=>out.push({id:'mb'+c.id,tipo:'aniversario',clienteId:c.id,tel:c.tel,nome:c.nome,pet:'',texto:aplicarVars(msgTpl('aniversario'),{tutor:primeiro(c.nome),clinica:emp})}));
+ db.agendamentos.filter(a=>a.data===ontem&&a.status==='finalizado').forEach(a=>{const r=petOf(a.petId);if(!r)return;out.push({id:'m'+a.id+'r',tipo:'retorno',clienteId:r.cliente.id,tel:r.cliente.tel,nome:r.cliente.nome,pet:r.pet.nome,texto:aplicarVars(msgTpl('retorno'),{tutor:primeiro(r.cliente.nome),pet:r.pet.nome,clinica:emp})});});
  return out;
 }
+function editarModelos(){
+ const t=(k)=>msgTpl(k).replace(/"/g,'&quot;');
+ const dias=(db.config&&db.config.msgDiasConsulta)||1;
+ const hook=(db.config&&db.config.msgWebhook)||'';
+ const campo=(k,lb)=>`<div class="field"><label>${lb}</label><textarea class="inp" id="tpl_${k}" rows="2" style="resize:vertical">${t(k)}</textarea></div>`;
+ const body=`<div style="font-size:12.5px;color:var(--muted);margin-bottom:10px">Variáveis disponíveis: <b>{tutor}</b> {pet} {hora} {data} {servico} {vacina} {clinica}</div>
+   ${campo('confirmacao','Confirmação (no dia)')}${campo('lembrete','Lembrete de consulta')}${campo('vacina','Lembrete de vacina')}${campo('aniversario','Aniversário')}${campo('retorno','Pós-atendimento')}
+   <div class="frow"><div class="field"><label>Antecedência do lembrete de consulta</label><select class="sel" id="tplDias"><option value="1" ${dias===1?'selected':''}>1 dia antes (amanhã)</option><option value="2" ${dias===2?'selected':''}>2 dias antes</option><option value="3" ${dias===3?'selected':''}>3 dias antes</option></select></div></div>
+   <div class="field"><label>Disparo automático — webhook (opcional)</label><input class="inp" id="tplHook" value="${hook.replace(/"/g,'&quot;')}" placeholder="https://hook.make.com/... (Make, Evolution API, etc.)"><div class="t-sub" style="margin-top:4px">Se preenchido, o botão envia direto pela sua automação (POST com telefone, nome, texto e tipo). Vazio = abre o WhatsApp pra você confirmar.</div></div>`;
+ openModal({title:'Modelos de mensagem',size:'wide',body,foot:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-ghost" style="color:var(--danger);margin-right:auto" onclick="resetModelos()">Restaurar padrão</button><button class="btn btn-primary" onclick="salvarModelos()">${ic('check',15)} Salvar</button>`});
+}
+function salvarModelos(){
+ if(!db.config.msgTemplates)db.config.msgTemplates={};
+ ['confirmacao','lembrete','vacina','aniversario','retorno'].forEach(k=>{db.config.msgTemplates[k]=$('#tpl_'+k).value;});
+ db.config.msgDiasConsulta=parseInt($('#tplDias').value)||1;
+ db.config.msgWebhook=$('#tplHook').value.trim();
+ save();closeModal();toast('Modelos salvos ✓');renderMensagens();
+}
+function resetModelos(){ if(!confirm('Restaurar os modelos padrão?'))return; delete db.config.msgTemplates; delete db.config.msgWebhook; db.config.msgDiasConsulta=1; save();closeModal();toast('Modelos restaurados');renderMensagens(); }
+function enviarLembrete(id){
+ const m=mensagensDoDia().find(x=>x.id===id); if(!m)return;
+ const hook=db.config&&db.config.msgWebhook;
+ if(hook){ try{ fetch(hook,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({telefone:m.tel,nome:m.nome,texto:m.texto,tipo:m.tipo})}).then(()=>toast('Lembrete enviado pela automação ✓')).catch(()=>{toast('Webhook falhou, abrindo WhatsApp','err');abrirWa(m);}); }catch(e){ abrirWa(m); } }
+ else { abrirWa(m); }
+ marcarEnviada(id);
+}
+function abrirWa(m){ window.open('https://wa.me/55'+m.tel.replace(/\D/g,'')+'?text='+encodeURIComponent(m.texto),'_blank'); }
 let msgFiltro='todos',msgEnviadas={};
 function renderMensagens(){
  const todas=mensagensDoDia();
  let list=msgFiltro==='todos'?todas:todas.filter(m=>m.tipo===msgFiltro);
  $('#content').innerHTML=`
- ${phead('Mensagens','Régua de relacionamento — comunicações sugeridas do dia, prontas para enviar.','<button class="btn btn-primary" onclick="msgAvulsa()">'+ic('send',15)+' Mensagem avulsa</button>')}
+ ${phead('Mensagens','Régua de relacionamento — comunicações sugeridas do dia, prontas para enviar.','<button class="btn btn-ghost" onclick="editarModelos()">'+ic('edit',15)+' Modelos</button> <button class="btn btn-primary" onclick="msgAvulsa()">'+ic('send',15)+' Mensagem avulsa</button>')}
  <div class="kpis">
    ${kpi('chat','teal','Sugeridas hoje',todas.length)}
    ${kpi('check','info','Confirmações',todas.filter(m=>m.tipo==='confirmacao').length)}
@@ -2587,7 +2807,7 @@ function renderMensagens(){
  </div>
  <div style="padding:10px 13px;background:var(--brand-tint);border:1px solid var(--brand-soft);border-radius:12px;margin-bottom:16px;font-size:13px;display:flex;align-items:center;gap:9px">${ic('alert',16)} <span>Sem custo de API: cada mensagem abre o WhatsApp já com o texto pronto. Você confere e envia com um toque.</span></div>
  <div class="flex-col" style="gap:10px">
-   ${list.length?list.map(m=>{const t=TIPO_MSG[m.tipo];const enviada=msgEnviadas[m.id];return `
+   ${list.length?list.map(m=>{const t=TIPO_MSG[m.tipo];const enviada=db.config.msgLog&&db.config.msgLog[m.id];return `
    <div class="card" style="padding:14px 16px;${enviada?'opacity:.6':''}">
      <div class="flex" style="gap:13px;align-items:flex-start">
        <span class="ic" style="width:38px;height:38px;border-radius:11px;display:grid;place-items:center;background:var(--surface-2);color:${t.cor};flex-shrink:0">${ic(t.ic,18)}</span>
@@ -2595,16 +2815,16 @@ function renderMensagens(){
          <div class="between"><b style="font-size:14px">${m.nome}${m.pet?` · ${m.pet}`:''}</b><span class="badge2" style="background:var(--surface-2);color:${t.cor}">${t.lbl}</span></div>
          <div style="font-size:13px;color:var(--ink-2);margin-top:5px;line-height:1.5">${m.texto}</div>
          <div class="flex" style="gap:8px;margin-top:11px">
-           <a class="btn btn-soft btn-sm" href="https://wa.me/55${m.tel.replace(/\D/g,'')}?text=${encodeURIComponent(m.texto)}" target="_blank" onclick="marcarEnviada('${m.id}')">${ic('wpp',14)} Enviar no WhatsApp</a>
+           <button class="btn btn-soft btn-sm" onclick="enviarLembrete('${m.id}')">${ic('wpp',14)} Enviar no WhatsApp</button>
            <button class="btn btn-ghost btn-sm" onclick="copiarMsg(this,${JSON.stringify(m.texto).replace(/"/g,'&quot;')})">${ic('doc',13)} Copiar</button>
-           ${enviada?'<span class="badge2" style="background:var(--ok-soft);color:var(--ok)">enviada ✓</span>':''}
+           ${enviada?'<span class="badge2" style="background:var(--ok-soft);color:var(--ok)">enviada '+ddmm(enviada)+'</span>':''}
          </div>
        </div>
      </div>
    </div>`;}).join(''):emptyState('chat','Nada para enviar agora','Quando houver agendamentos, vacinas ou aniversários, as mensagens aparecem aqui.')}
  </div>`;
 }
-function marcarEnviada(id){msgEnviadas[id]=true;setTimeout(()=>renderMensagens(),300);}
+function marcarEnviada(id){if(!db.config.msgLog)db.config.msgLog={};db.config.msgLog[id]=todayISO();save();setTimeout(()=>renderMensagens(),300);}
 function copiarMsg(btn,txt){navigator.clipboard&&navigator.clipboard.writeText(txt);const o=btn.innerHTML;btn.innerHTML=ic('check',13)+' Copiado';setTimeout(()=>btn.innerHTML=o,1500);}
 function msgAvulsa(){
  const body=`<div class="field"><label>Cliente <span class="req">*</span></label><select class="sel" id="maCli">${db.clientes.map(c=>`<option value="${c.id}">${c.nome} — ${c.tel}</option>`).join('')}</select></div>
