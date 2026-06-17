@@ -2241,7 +2241,8 @@ async function persistirCaixa(){ if(!supaOn())return; try{ await sb.from('caixa'
 
 // ---- sync genérico por diff (módulos restantes + pets aninhados) ----
 function snapId(o){ try{ return JSON.stringify(o); }catch(e){ return Math.random()+''; } }
-function initSnap(){ _snap={}; COL_TIPOS.forEach(t=>{ _snap[t]={}; (db[t]||[]).forEach(o=>{ if(o&&o.id!=null)_snap[t][o.id]=snapId(o); }); }); _snap._pets={}; (db.clientes||[]).forEach(c=>(c.pets||[]).forEach(p=>{ _snap._pets[p.id]=snapId(p); })); _snap._cfg=snapId({e:db.empresa,c:db.config}); }
+function chunks(a,n){ const o=[]; for(let i=0;i<a.length;i+=n)o.push(a.slice(i,i+n)); return o; }
+function initSnap(){ _snap={}; COL_TIPOS.forEach(t=>{ _snap[t]={}; (db[t]||[]).forEach(o=>{ if(o&&o.id!=null)_snap[t][o.id]=snapId(o); }); }); _snap._pets={}; (db.clientes||[]).forEach(c=>(c.pets||[]).forEach(p=>{ _snap._pets[p.id]=snapId(p); })); _snap._clientes={}; (db.clientes||[]).forEach(c=>{ _snap._clientes[c.id]=snapId({...c,pets:0}); }); _snap._cfg=snapId({e:db.empresa,c:db.config}); }
 function agendarSync(){ if(!supaOn()||!clinicaAtual)return; clearTimeout(_syncTimer); _syncTimer=setTimeout(syncDiff,500); }
 async function persistirColecao(tipo,arr){ if(!supaOn()||!arr||!arr.length)return; try{ await sb.from('colecoes').upsert(arr.map(o=>({clinica_id:clinicaAtual,tipo,id:String(o.id),dados:o}))); }catch(e){ console.error('persistirColecao '+tipo,e); } }
 async function persistirConfig(){ if(!supaOn())return; try{ await sb.from('colecoes').upsert({clinica_id:clinicaAtual,tipo:'_config',id:'empresa',dados:{empresa:db.empresa,config:db.config}}); }catch(e){ console.error('persistirConfig',e); } }
@@ -2261,13 +2262,22 @@ async function syncDiff(){
     const petUps=[];
     Object.keys(petsAtual).forEach(id=>{ if(_snap._pets[id]!==snapId(petsAtual[id].p)) petUps.push(petsAtual[id]); });
     _snap._pets={}; Object.keys(petsAtual).forEach(id=>{ _snap._pets[id]=snapId(petsAtual[id].p); });
+    // clientes (precisam subir ANTES dos pets pela FK cliente_id)
+    const cliAtual={}; (db.clientes||[]).forEach(c=>{ cliAtual[c.id]=c; });
+    const snapC=_snap._clientes||{}; const cliUps=[];
+    Object.keys(cliAtual).forEach(id=>{ if(snapC[id]!==snapId({...cliAtual[id],pets:0})) cliUps.push(unmapCliente(cliAtual[id])); });
+    _snap._clientes={}; Object.keys(cliAtual).forEach(id=>{ _snap._clientes[id]=snapId({...cliAtual[id],pets:0}); });
     // config
     const cfgH=snapId({e:db.empresa,c:db.config}); const cfgMudou=_snap._cfg!==cfgH; _snap._cfg=cfgH;
-    // executa
+    // executa (ordem: clientes -> pets -> coleções por causa das FKs)
+    let falhas=0;
+    for(const ch of chunks(cliUps,150)){ try{ const {error}=await sb.from('clientes').upsert(ch); if(error){falhas+=ch.length;console.error('clientes upsert',error);} }catch(e){falhas+=ch.length;console.error(e);} }
+    const petPayload=petUps.map(pu=>unmapPet(pu.p,pu.cli));
+    for(const ch of chunks(petPayload,150)){ try{ const {error}=await sb.from('pets').upsert(ch); if(error){falhas+=ch.length;console.error('pets upsert',error);} }catch(e){falhas+=ch.length;console.error(e);} }
     if(ups.length) await sb.from('colecoes').upsert(ups);
     for(const d of dels){ try{ await sb.from('colecoes').delete().eq('clinica_id',clinicaAtual).eq('tipo',d.tipo).eq('id',d.id); }catch(e){ console.error(e); } }
-    for(const pu of petUps){ await persistirPet(pu.p, pu.cli); }
     if(cfgMudou) await persistirConfig();
+    if(falhas) toast(falhas+' registro(s) não subiram pra nuvem','err'); else if(cliUps.length+petPayload.length>30) toast('Dados sincronizados na nuvem ✓');
   }catch(e){ console.error('syncDiff',e); }
 }
 
