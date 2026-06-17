@@ -333,7 +333,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 let sb=null; try{ if(typeof window!=='undefined'&&window.supabase&&SUPA_URL&&SUPA_KEY){ sb=window.supabase.createClient(SUPA_URL,SUPA_KEY,{auth:{persistSession:true,autoRefreshToken:true}}); } }catch(e){ console.warn('Supabase init falhou:',e); }
 let modoDemo=false, clinicaAtual=null, membroAtual=null, _snap={}, _syncTimer=null;
 const COL_TIPOS=['profissionais','produtos','agendamentos','internacoes','documentos','orcamentos','planos','assinaturas'];
-const SEED_TIPOS=['profissionais','produtos','planos'];
+const SEED_TIPOS=[];
 function supaOn(){return !!sb && !modoDemo;}
 function save(){try{localStorage.setItem(SK,JSON.stringify(db));}catch(e){} if(typeof agendarSync==='function')agendarSync();}
 function load(){try{const r=localStorage.getItem(SK);if(r)return JSON.parse(r);}catch(e){}return null;}
@@ -681,6 +681,39 @@ function salvarPerms(){
  db.config.perms=perms; save(); toast('Permissões salvas ✓'); renderShell(); go('config');
 }
 function resetPerms(){ if(!confirm('Restaurar as permissões padrão dos perfis?'))return; delete db.config.perms; save(); toast('Permissões restauradas ao padrão'); renderShell(); go('config'); }
+const CORES_PROF=['var(--brand)','var(--info)','var(--accent)','var(--gold)','#8B5CF6','#EC4899','#0EA5E9','#F59E0B'];
+function openNovoProfissional(id){
+ const p=id?profOf(id):null;
+ const body=`<div class="field"><label>Nome <span class="req">*</span></label><input class="inp" id="pfNome" value="${p?p.nome.replace(/"/g,'&quot;'):''}" placeholder="Nome do profissional"></div>
+   <div class="frow"><div class="field"><label>Função</label><input class="inp" id="pfPapel" value="${p?(p.papel||''):''}" placeholder="Ex: Médico Veterinário, Tosador"></div>
+   <div class="field"><label>CRMV</label><input class="inp" id="pfCrmv" value="${p?(p.crmv||''):''}" placeholder="opcional"></div></div>
+   <div class="frow"><div class="field"><label>Comissão (%)</label><input class="inp" type="number" step="0.5" id="pfCom" value="${p?(p.comissao||0):0}"></div>
+   <div class="field"><label>Tipo</label><select class="sel" id="pfTipo"><option value="vet" ${!p||p.tipo==='vet'?'selected':''}>Veterinário</option><option value="estetica" ${p&&p.tipo==='estetica'?'selected':''}>Estética (banho/tosa)</option><option value="outro" ${p&&p.tipo==='outro'?'selected':''}>Outro</option></select></div></div>`;
+ openModal({title:id?'Editar profissional':'Novo profissional',body,foot:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="salvarProfissional(${id?"'"+id+"'":'null'})">${ic('check',15)} Salvar</button>`});
+}
+function salvarProfissional(id){
+ const nome=$('#pfNome').value.trim(); if(!nome){toast('Informe o nome','err');return;}
+ const dados={nome,papel:$('#pfPapel').value.trim()||'—',crmv:$('#pfCrmv').value.trim(),comissao:parseFloat($('#pfCom').value)||0,tipo:$('#pfTipo').value};
+ if(id){Object.assign(profOf(id),dados);}
+ else{ dados.id=novoId('f'); dados.cor=CORES_PROF[db.profissionais.length%CORES_PROF.length]; db.profissionais.push(dados); }
+ save();closeModal();toast('Profissional salvo ✓');renderConfig();
+}
+function excluirProfissional(id){
+ if(db.profissionais.length<=1){toast('A clínica precisa de ao menos um profissional','err');return;}
+ if(!confirm('Excluir este profissional?'))return;
+ db.profissionais=db.profissionais.filter(p=>p.id!==id);
+ save();toast('Profissional removido');renderConfig();
+}
+async function limparDemo(){
+ if(!supaOn()){toast('Disponível no modo nuvem','err');return;}
+ if(!confirm('Limpar a equipe, catálogo, planos e registros de exemplo desta clínica? Não apaga clientes nem vendas.'))return;
+ try{
+   for(const tipo of COL_TIPOS){ await sb.from('colecoes').delete().eq('clinica_id',clinicaAtual).eq('tipo',tipo); db[tipo]=[]; }
+   const eu={id:novoId('f'),nome:(membroAtual&&membroAtual.nome)||'Você',papel:'Médico(a) Veterinário(a)',crmv:'',tipo:'vet',cor:'var(--brand)',comissao:0};
+   db.profissionais=[eu]; await persistirColecao('profissionais',[eu]);
+   initSnap(); save(); toast('Dados de demonstração limpos ✓'); renderShell(); go('config');
+ }catch(e){ console.error(e); toast('Falha ao limpar: '+(e.message||''),'err'); }
+}
 
 function badgeFor(id){
  if(id==='agenda'){const n=db.agendamentos.filter(a=>a.data===todayISO()&&['agendado','confirmado','atendimento'].includes(a.status)).length;return n||'';}
@@ -1837,9 +1870,10 @@ function renderCfgBody(){
      <div class="flex" style="gap:8px"><button class="btn btn-soft btn-sm" onclick="migrarLocalParaNuvem()">${ic('download',14)} Enviar dados locais p/ nuvem</button><button class="btn btn-ghost btn-sm" onclick="sairConta()">${ic('logout',14)} Sair da conta</button></div>
    </div></div>`:''}`;
  } else if(cfgTab==='equipe'){
-   box.innerHTML=`<div class="card"><div class="card-head"><h3>Profissionais</h3></div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Profissional</th><th>Função</th><th>CRMV</th><th class="num">Comissão</th></tr></thead><tbody>
-     ${db.profissionais.map(p=>`<tr><td><div class="cellflex"><div class="av-pet" style="width:34px;height:34px;background:${p.cor}22;color:${p.cor};font-weight:700;font-size:12px">${initials(p.nome)}</div><b>${p.nome}</b></div></td><td>${p.papel}</td><td class="t-sub">${p.crmv||'—'}</td><td class="num">${p.comissao}%</td></tr>`).join('')}
-   </tbody></table></div></div>`;
+   box.innerHTML=`<div class="card"><div class="card-head"><h3>Profissionais</h3><div class="sp"></div><button class="btn btn-soft btn-sm" onclick="openNovoProfissional()">${ic('plus',13)} Novo profissional</button></div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Profissional</th><th>Função</th><th>CRMV</th><th class="num">Comissão</th><th></th></tr></thead><tbody>
+     ${db.profissionais.map(p=>`<tr><td><div class="cellflex"><div class="av-pet" style="width:34px;height:34px;background:${p.cor}22;color:${p.cor};font-weight:700;font-size:12px">${initials(p.nome)}</div><b>${p.nome}</b></div></td><td>${p.papel}</td><td class="t-sub">${p.crmv||'—'}</td><td class="num">${p.comissao}%</td><td style="text-align:right"><button class="btn btn-icon btn-ghost btn-sm" onclick="openNovoProfissional('${p.id}')">${ic('edit',13)}</button><button class="btn btn-icon btn-ghost btn-sm" style="color:var(--danger)" onclick="excluirProfissional('${p.id}')">${ic('trash',13)}</button></td></tr>`).join('')}
+   </tbody></table></div></div>
+   ${supaOn()?`<div class="card card-pad" style="margin-top:14px;max-width:560px;border:1px solid var(--gold-soft)"><div class="flex" style="gap:8px;margin-bottom:6px">${ic('alert',16)}<b>Limpar dados de demonstração</b></div><div class="t-sub" style="margin-bottom:10px">Remove a equipe, catálogo, planos e demais registros de exemplo desta clínica, deixando só você. Útil logo após criar a conta. Não apaga clientes nem vendas.</div><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="limparDemo()">${ic('trash',13)} Limpar dados de demonstração</button></div>`:''}`;
  } else if(cfgTab==='usuarios'){
    const perm={dono:'Acesso total (financeiro, relatórios, config)',veterinario:'Clínico, agenda, PDV, orçamentos, estoque',recepcao:'Agenda, clientes, PDV e caixa'};
    if(supaOn()){
@@ -1972,6 +2006,11 @@ async function carregarClinica(){
       if(grp[tipo]) db[tipo]=grp[tipo];
       else if(SEED_TIPOS.includes(tipo) && db[tipo] && db[tipo].length){ await persistirColecao(tipo, db[tipo]); /* mantém o seed em memória */ }
       else db[tipo]=[];
+    }
+    // clínica nova começa zerada, com você como único profissional
+    if(!db.profissionais.length){
+      const eu={id:novoId('f'),nome:(membroAtual&&membroAtual.nome)||'Você',papel:'Médico(a) Veterinário(a)',crmv:'',tipo:'vet',cor:'var(--brand)',comissao:0};
+      db.profissionais=[eu]; await persistirColecao('profissionais',[eu]);
     }
     const cfgRow=(cols||[]).find(r=>r.tipo==='_config');
     if(cfgRow&&cfgRow.dados){ if(cfgRow.dados.empresa)db.empresa=cfgRow.dados.empresa; if(cfgRow.dados.config)db.config=cfgRow.dados.config; }
