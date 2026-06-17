@@ -2017,7 +2017,7 @@ async function carregarClinica(){
     else { await persistirConfig(); }
     initSnap();
     return true;
-  }catch(err){ console.error('carregarClinica:',err); toast('Erro ao carregar dados da clínica','err'); return true; }
+  }catch(err){ console.error('carregarClinica:',err); throw err; }
 }
 async function persistirCliente(c){ if(!supaOn()||!c)return; try{ const {error}=await sb.from('clientes').upsert(unmapCliente(c)); if(error)throw error; }catch(err){ console.error('persistirCliente:',err); toast('Falha ao salvar cliente na nuvem','err'); } }
 async function persistirPet(p,cliId){ if(!supaOn()||!p)return; try{ const {error}=await sb.from('pets').upsert(unmapPet(p,cliId)); if(error)throw error; }catch(err){ console.error('persistirPet:',err); toast('Falha ao salvar pet na nuvem','err'); } }
@@ -2106,8 +2106,54 @@ function renderAuth(modo){ modo=modo||'login';
       ${modo==='signup'?`<div class="field"><label>Seu nome</label><input class="inp" id="auNome" placeholder="Como quer ser chamado(a)"></div>`:''}
       <button class="btn btn-primary" style="width:100%;margin-top:6px" id="auBtn" onclick="${modo==='login'?'fazerLogin()':'fazerCadastro()'}">${modo==='login'?'Entrar':'Criar conta'}</button>
       <div style="text-align:center;margin-top:14px;font-size:13px">${modo==='login'?`Não tem conta? <a href="#" onclick="renderAuth('signup');return false" style="color:var(--brand);font-weight:600">Cadastrar</a>`:`Já tem conta? <a href="#" onclick="renderAuth('login');return false" style="color:var(--brand);font-weight:600">Entrar</a>`}</div>
+      ${modo==='login'?`<div style="text-align:center;margin-top:8px;font-size:12.5px"><a href="#" onclick="renderRecuperar();return false" class="t-sub" style="text-decoration:underline">Esqueci minha senha</a></div>`:''}
       <div style="text-align:center;margin-top:18px;border-top:1px solid var(--line-2);padding-top:14px"><a href="#" onclick="entrarDemo();return false" class="t-sub" style="text-decoration:underline">Entrar em modo demonstração</a></div>
     </div></div>`;
+}
+function renderSplash(msg){
+ $('#app').innerHTML=`<div style="min-height:100vh;display:grid;place-items:center;background:var(--bg)"><div style="text-align:center"><style>@keyframes vetspin{to{transform:rotate(360deg)}}</style>
+   <div style="font-family:'Plus Jakarta Sans';font-weight:800;font-size:26px;color:var(--brand);margin-bottom:16px">Vetória</div>
+   <div style="width:34px;height:34px;border:3px solid var(--brand-soft);border-top-color:var(--brand);border-radius:50%;margin:0 auto;animation:vetspin .8s linear infinite"></div>
+   <div class="t-sub" style="margin-top:14px">${msg||'Carregando…'}</div></div></div>`;
+}
+function renderErroConexao(){
+ $('#app').innerHTML=`<div style="min-height:100vh;display:grid;place-items:center;background:var(--bg);padding:20px"><div class="card" style="max-width:380px;padding:28px;text-align:center">
+   <div style="color:var(--danger);margin-bottom:8px">${ic('alert',28)}</div>
+   <b style="font-size:16px">Sem conexão com o servidor</b>
+   <div class="t-sub" style="margin:8px 0 16px">Verifique sua internet e tente novamente.</div>
+   <button class="btn btn-primary" onclick="iniciar()">Tentar novamente</button>
+   <div style="margin-top:10px"><a href="#" onclick="entrarDemo();return false" class="t-sub" style="text-decoration:underline">Entrar em modo demonstração</a></div>
+ </div></div>`;
+}
+function renderRecuperar(){
+ $('#app').innerHTML=`<div style="min-height:100vh;display:grid;place-items:center;background:var(--bg);padding:20px"><div class="card" style="width:100%;max-width:380px;padding:30px 26px">
+   <div style="text-align:center;margin-bottom:18px"><div style="font-family:'Plus Jakarta Sans';font-weight:800;font-size:22px;color:var(--brand)">Recuperar senha</div><div class="t-sub">Enviaremos um link de redefinição</div></div>
+   <div class="field"><label>E-mail da conta</label><input class="inp" id="auEmail" type="email" placeholder="voce@email.com"></div>
+   <button class="btn btn-primary" style="width:100%;margin-top:6px" id="auBtn" onclick="enviarRecuperacao()">Enviar link</button>
+   <div style="text-align:center;margin-top:14px;font-size:13px"><a href="#" onclick="renderAuth('login');return false" style="color:var(--brand);font-weight:600">Voltar ao login</a></div>
+ </div></div>`;
+}
+async function enviarRecuperacao(){
+ const email=$('#auEmail').value.trim(); if(!email){toast('Informe o e-mail','err');return;}
+ const btn=$('#auBtn'); if(btn)btn.textContent='Enviando…';
+ try{ const { error } = await sb.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname}); if(error)throw error; toast('Link enviado para '+email+'. Confira seu e-mail.'); renderAuth('login'); }
+ catch(e){ toast(e.message||'Falha ao enviar','err'); if(btn)btn.textContent='Enviar link'; }
+}
+function renderNovaSenha(){
+ $('#app').innerHTML=`<div style="min-height:100vh;display:grid;place-items:center;background:var(--bg);padding:20px"><div class="card" style="width:100%;max-width:380px;padding:30px 26px">
+   <div style="text-align:center;margin-bottom:18px"><div style="font-family:'Plus Jakarta Sans';font-weight:800;font-size:22px;color:var(--brand)">Nova senha</div><div class="t-sub">Defina sua nova senha de acesso</div></div>
+   <div class="field"><label>Nova senha</label><input class="inp" id="nsSenha" type="password" placeholder="mínimo 6 caracteres"></div>
+   <div class="field"><label>Confirmar senha</label><input class="inp" id="nsConf" type="password" placeholder="repita a senha"></div>
+   <button class="btn btn-primary" style="width:100%;margin-top:6px" id="nsBtn" onclick="atualizarSenha()">Salvar nova senha</button>
+ </div></div>`;
+}
+async function atualizarSenha(){
+ const s1=$('#nsSenha').value, s2=$('#nsConf').value;
+ if(s1.length<6){toast('Senha de no mínimo 6 caracteres','err');return;}
+ if(s1!==s2){toast('As senhas não conferem','err');return;}
+ const btn=$('#nsBtn'); if(btn)btn.textContent='Salvando…';
+ try{ const { error } = await sb.auth.updateUser({password:s1}); if(error)throw error; try{history.replaceState(null,'',location.pathname);}catch(e){} toast('Senha atualizada ✓'); iniciar(); }
+ catch(e){ toast(e.message||'Falha ao atualizar','err'); if(btn)btn.textContent='Salvar nova senha'; }
 }
 async function fazerLogin(){ const email=$('#auEmail').value.trim(),senha=$('#auSenha').value; if(!email||!senha){toast('Preencha e-mail e senha','err');return;} $('#auBtn').textContent='Entrando…';
   try{ const {error}=await sb.auth.signInWithPassword({email,password:senha}); if(error)throw error; iniciar(); }catch(err){ toast(err.message||'Falha no login','err'); if($('#auBtn'))$('#auBtn').textContent='Entrar'; } }
@@ -2168,14 +2214,22 @@ async function sairConta(){ try{ if(sb) await sb.auth.signOut(); }catch(e){} cli
 // ---- BOOT ----
 async function iniciar(){
   if(supaOn()){
-    let sess=null; try{ sess=(await sb.auth.getSession()).data.session; }catch(e){}
+    if(location.hash.includes('type=recovery')){ renderNovaSenha(); return; }
+    renderSplash('Conectando…');
+    let sess=null;
+    try{ sess=(await sb.auth.getSession()).data.session; }
+    catch(e){ console.error('getSession',e); renderErroConexao(); return; }
     if(!sess){ renderAuth('login'); return; }
-    const temClinica=await carregarClinica();
+    renderSplash('Carregando sua clínica…');
+    let temClinica;
+    try{ temClinica=await carregarClinica(); }
+    catch(e){ console.error('carregarClinica',e); renderErroConexao(); return; }
     if(!temClinica){ renderOnboarding(); return; }
   }
   renderShell(); go('dash');
   if(location.hash.startsWith('#portal/')){ openPortalOverlay(location.hash.split('/')[1],true); }
 }
+if(sb){ try{ sb.auth.onAuthStateChange((event)=>{ if(event==='PASSWORD_RECOVERY'){ renderNovaSenha(); } else if(event==='SIGNED_OUT'){ if(!modoDemo){ clinicaAtual=null; membroAtual=null; eqCarregado=false; renderAuth('login'); } } }); }catch(e){ console.warn(e); } }
 iniciar();
 window.addEventListener('hashchange',()=>{if(location.hash.startsWith('#portal/'))openPortalOverlay(location.hash.split('/')[1],true);else closePortalOverlay();});
 
