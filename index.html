@@ -471,6 +471,8 @@ function seed(){
   PR('Soro Fisiológico 500ml','Medicamentos',12.5,6,1,12,dia(15),'un'),
   PR('Tapete Higiênico 30un','Higiene',49.9,31,11,5,'','pct')
  ];
+ (()=>{const amox=produtos.find(p=>p.nome.includes('Amoxicilina'));if(amox){amox.lotes=[{id:uid('lt'),lote:'L2312',validade:dia(-6),qtd:3},{id:uid('lt'),lote:'L2405',validade:dia(11),qtd:4}];amox.estoque=7;}
+   const verm=produtos.find(p=>p.nome.includes('Vermífugo'));if(verm){verm.lotes=[{id:uid('lt'),lote:'V401',validade:dia(22),qtd:2},{id:uid('lt'),lote:'V512',validade:fmtDate(new Date(Y,M+6,1)),qtd:8}];verm.estoque=10;}})();
  // agendamentos
  const ag=[];
  const A=(d,h,ci,pi,profId,tipo,svId,status,dur)=>{const c=clientes.find(x=>x.id===ci);const sv=produtos.find(x=>x.id===svId);ag.push({id:uid('a'),data:d,hora:h,dur:dur||30,clienteId:ci,petId:pi,profId,tipo,servicoId:svId,servicoNome:sv?sv.nome:'',status,valor:sv?sv.preco:0,obs:''});};
@@ -663,6 +665,8 @@ function ehDono(){ return papelAtual()==='dono'; }
 function permsDe(papel){ if(papel==='dono')return '*'; const cp=db.config&&db.config.perms&&db.config.perms[papel]; return cp||PERMS[papel]||[]; }
 function podeVer(view){ const p=permsDe(papelAtual()); return p==='*'||(Array.isArray(p)&&p.includes(view)); }
 function setPapelOverride(v){ papelOverride=v||null; renderShell(); go('dash'); }
+function toggleVerComo(e){ if(e)e.stopPropagation(); const l=$('#vcList'); if(!l)return; const aberto=l.style.display==='block'; l.style.display=aberto?'none':'block'; if(!aberto){ setTimeout(()=>document.addEventListener('click',fecharVerComo),0); } }
+function fecharVerComo(){ const l=$('#vcList'); if(l)l.style.display='none'; document.removeEventListener('click',fecharVerComo); }
 function matrizPermsHTML(){
  const mods=[]; NAV.forEach(g=>g.items.forEach(it=>mods.push(it)));
  const perfis=[['veterinario','Veterinário'],['recepcao','Recepção']];
@@ -718,7 +722,7 @@ async function limparDemo(){
 function badgeFor(id){
  if(id==='agenda'){const n=db.agendamentos.filter(a=>a.data===todayISO()&&['agendado','confirmado','atendimento'].includes(a.status)).length;return n||'';}
  if(id==='internacao')return db.internacoes.filter(i=>i.status==='internado').length||'';
- if(id==='estoque'){const n=db.produtos.filter(p=>p.tipo==='produto'&&p.estoque<=p.min).length;return n||'';}
+ if(id==='estoque'){const baixo=db.produtos.filter(p=>p.tipo==='produto'&&estoqueTotal(p)<=p.min).length;const venc=alertasValidade(30).filter(a=>a.sit==='vencido').length;const n=baixo+venc;return n||'';}
  if(id==='vacinas'){const n=vacinasPendentes().length;return n||'';}
  if(id==='estetica'){const n=db.agendamentos.filter(a=>a.data===todayISO()&&['banho','tosa'].includes(a.tipo)&&a.etapa!=='entregue'&&a.status!=='cancelado').length;return n||'';}
  if(id==='orcamentos'){const n=(db.orcamentos||[]).filter(o=>o.status==='aberto').length;return n||'';}
@@ -743,7 +747,7 @@ function renderShell(){
    </div>
    <div class="sb-scroll" id="navList"></div>
    <div class="sb-foot">
-     ${papelReal()==='dono'?`<div style="padding:8px 10px;margin-bottom:8px;background:var(--surface-2);border-radius:10px"><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:4px">Ver como</div><select class="sel" style="padding:6px 8px;font-size:12.5px" onchange="setPapelOverride(this.value)"><option value="" ${!papelOverride?'selected':''}>Meu acesso (Dono)</option><option value="veterinario" ${papelOverride==='veterinario'?'selected':''}>Veterinário</option><option value="recepcao" ${papelOverride==='recepcao'?'selected':''}>Recepção</option></select></div>`:''}
+     ${papelReal()==='dono'?(()=>{const opts=[['','Meu acesso (Dono)'],['veterinario','Veterinário'],['recepcao','Recepção']];const lbAtual=papelOverride?PAPEL_LB[papelOverride]:'Meu acesso (Dono)';return `<div style="margin-bottom:10px"><div style="font-size:10.5px;letter-spacing:1.4px;text-transform:uppercase;color:#5E8A7D;font-weight:700;margin:0 4px 6px">Ver como</div><div style="position:relative"><button id="vcBtn" onclick="toggleVerComo(event)" style="width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 11px;border-radius:10px;background:rgba(255,255,255,.08);color:#DCEAE5;border:1px solid rgba(255,255,255,.14);font-size:13px;font-weight:600;cursor:pointer"><span>${lbAtual}</span><span style="opacity:.7;display:flex">${ic('chevron',16)}</span></button><div id="vcList" style="display:none;position:absolute;bottom:calc(100% + 6px);left:0;right:0;background:#0F3B31;border:1px solid rgba(255,255,255,.16);border-radius:10px;padding:5px;box-shadow:0 10px 30px rgba(0,0,0,.4);z-index:60">${opts.map(o=>{const sel=(papelOverride||'')===o[0];const bg=sel?'rgba(18,135,108,.55)':'transparent';return `<button onclick="setPapelOverride('${o[0]}')" style="width:100%;text-align:left;padding:8px 10px;border-radius:7px;color:${sel?'#fff':'#C3DAD2'};background:${bg};font-size:13px;font-weight:600;cursor:pointer" onmouseover="this.style.background='rgba(255,255,255,.1)'" onmouseout="this.style.background='${bg}'">${o[1]}</button>`;}).join('')}</div></div></div>`;})():''}
      <button class="sb-user" onclick="${podeVer('config')?"go('config')":"toast('Acesso restrito ao Dono/Admin','err')"}">
        <div class="av">${initials(u.nome)}</div>
        <div class="nm"><b>${u.nome}</b><span>${PAPEL_LB[papelAtual()]||'Equipe'}${papelOverride?' (prévia)':''}</span></div>
@@ -820,13 +824,15 @@ document.addEventListener('click',e=>{if(!e.target.closest('.search'))closeSearc
 
 function abrirNotificacoes(){
  const vac=vacinasPendentes();
- const estbaixo=db.produtos.filter(p=>p.tipo==='produto'&&p.estoque<=p.min);
+ const estbaixo=db.produtos.filter(p=>p.tipo==='produto'&&estoqueTotal(p)<=p.min);
+ const validadeAlertas=alertasValidade(30);
  const contasVenc=db.financeiro.filter(f=>f.tipo==='despesa'&&!f.pago);
  const aniv=db.clientes.filter(c=>{if(!c.nasc)return false;const n=parseISO(c.nasc),t=new Date();return n.getMonth()===t.getMonth();});
  let body='<div class="flex-col">';
  const sec=(t,arr,render)=>{body+=`<div><div class="sb-group" style="color:var(--muted);margin:0 0 8px">${t} (${arr.length})</div>${arr.length?arr.map(render).join(''):'<div class="t-sub" style="padding:4px 0">Tudo certo por aqui ✓</div>'}</div>`;};
  sec('Vacinas próximas/atrasadas',vac.slice(0,5),v=>`<div class="between" style="padding:8px 11px;background:var(--surface-2);border-radius:10px;margin-bottom:6px"><span><b>${v.pet.nome}</b> — ${v.vac.nome}</span><span class="badge2" style="background:${v.dias<0?'var(--danger-soft)':'var(--gold-soft)'};color:${v.dias<0?'var(--danger)':'var(--gold)'}">${v.dias<0?Math.abs(v.dias)+'d atrasada':'em '+v.dias+'d'}</span></div>`);
  sec('Estoque baixo',estbaixo.slice(0,5),p=>`<div class="between" style="padding:8px 11px;background:var(--surface-2);border-radius:10px;margin-bottom:6px"><span><b>${p.nome}</b></span><span class="badge2" style="background:var(--danger-soft);color:var(--danger)">${p.estoque} / mín ${p.min}</span></div>`);
+ sec('Lotes vencidos/vencendo',validadeAlertas.slice(0,5),a=>`<div class="between" style="padding:8px 11px;background:var(--surface-2);border-radius:10px;margin-bottom:6px"><span><b>${a.p.nome}</b>${a.l&&a.l.lote?' · '+a.l.lote:''}</span><span class="badge2" style="background:${a.sit==='vencido'?'var(--danger-soft)':'var(--gold-soft)'};color:${a.sit==='vencido'?'var(--danger)':'var(--gold)'}">${a.sit==='vencido'?'vencido':'vence em '+a.d+'d'}</span></div>`);
  sec('Contas a pagar',contasVenc.slice(0,4),f=>`<div class="between" style="padding:8px 11px;background:var(--surface-2);border-radius:10px;margin-bottom:6px"><span><b>${f.desc}</b><br><span class="t-sub">vence ${ddmm(f.venc)}</span></span><b>${BRL(f.valor)}</b></div>`);
  sec('Aniversariantes do mês',aniv.slice(0,4),c=>`<div class="between" style="padding:8px 11px;background:var(--surface-2);border-radius:10px;margin-bottom:6px"><span>${ic('cake',15)} <b>${c.nome}</b></span><span class="t-sub">${ddmm(c.nasc)}</span></div>`);
  body+='</div>';
@@ -907,7 +913,7 @@ function renderDash(){
        </div>
      </div>
      <button class="card card-pad" style="text-align:left;cursor:pointer" onclick="abrirNotificacoes()" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--line)'">
-       <div class="flex"><span class="ic coral" style="width:40px;height:40px;border-radius:11px;display:grid;place-items:center">${ic('alert')}</span><div><b style="font-size:14px">${vacinasPendentes().length+db.produtos.filter(p=>p.tipo==='produto'&&p.estoque<=p.min).length} alertas precisam de atenção</b><div class="t-sub">Vacinas, estoque e contas a vencer</div></div><div class="sp"></div>${ic('chevron',18)}</div>
+       <div class="flex"><span class="ic coral" style="width:40px;height:40px;border-radius:11px;display:grid;place-items:center">${ic('alert')}</span><div><b style="font-size:14px">${vacinasPendentes().length+db.produtos.filter(p=>p.tipo==='produto'&&estoqueTotal(p)<=p.min).length+alertasValidade(30).length} alertas precisam de atenção</b><div class="t-sub">Vacinas, estoque e contas a vencer</div></div><div class="sp"></div>${ic('chevron',18)}</div>
      </button>
    </div>
  </div>`;
@@ -1499,7 +1505,7 @@ function finalizarVenda(){
  const vend=$('#pdvVend').value;const cliNome=pdvCliente?cli(pdvCliente).nome:'Consumidor';
  const venda={id:novoId('vd'),data:todayISO(),clienteId:pdvCliente||null,profId:vend,itens:carrinho.map(i=>({nome:i.nome,qtd:i.qtd,unit:i.unit})),subtotal:pgSub,desconto:c.descValor,autorizadoPor,parcelas:n,pagamentos:[{forma:fp.nome,formaId:fp.id,valor:total,parcelas:n,taxa:c.taxa}],total,status:'pago'};
  db.vendas.push(venda);
- carrinho.forEach(i=>{const p=prodOf(i.id);if(p&&p.tipo==='produto'&&p.estoque!=null)p.estoque=Math.max(0,p.estoque-i.qtd);});
+ carrinho.forEach(i=>{const p=prodOf(i.id);if(p&&p.tipo==='produto'&&p.estoque!=null)baixarEstoque(p,i.qtd);});
  // gera 1 recebível por parcela, com taxa/líquido e data de liberação
  const vC=Math.round(total*100),lC=Math.round(c.liquido*100),bV=Math.floor(vC/n),bL=Math.floor(lC/n);
  const novasFin=[];
@@ -1528,18 +1534,17 @@ function verVendas(){
 let estTab='produtos',estBusca='';
 function renderEstoque(){
  const produtos=db.produtos.filter(p=>p.tipo==='produto');
- const baixo=produtos.filter(p=>p.estoque<=p.min);
+ const baixo=produtos.filter(p=>estoqueTotal(p)<=p.min);
  const hoje=todayISO();
- const vencendo=produtos.filter(p=>p.validade&&diasEntre(hoje,p.validade)<=30&&diasEntre(hoje,p.validade)>=0);
- const vencidos=produtos.filter(p=>p.validade&&diasEntre(hoje,p.validade)<0);
- const valorEstoque=produtos.reduce((s,p)=>s+(p.custo||0)*p.estoque,0);
+ const alertasVal=alertasValidade(30);
+ const valorEstoque=produtos.reduce((s,p)=>s+(p.custo||0)*estoqueTotal(p),0);
  $('#content').innerHTML=`
- ${phead('Estoque','Produtos, validades e sugestões de reposição.','<button class="btn btn-primary" onclick="openNovoProduto()">'+ic('plus',15)+' Novo produto</button>')}
+ ${phead('Estoque','Produtos, lotes, validades e sugestões de reposição.','<button class="btn btn-primary" onclick="openNovoProduto()">'+ic('plus',15)+' Novo produto</button>')}
  <div class="kpis">
-   ${kpi('box','teal','Itens em estoque',num(produtos.reduce((s,p)=>s+p.estoque,0)))}
+   ${kpi('box','teal','Itens em estoque',num(produtos.reduce((s,p)=>s+estoqueTotal(p),0)))}
    ${kpi('money','info','Valor investido',BRL(valorEstoque))}
    ${kpi('alert','danger','Estoque baixo',baixo.length)}
-   ${kpi('clock','gold','Vencendo (30d)',vencendo.length+vencidos.length)}
+   ${kpi('clock','gold','Vencendo / vencidos',alertasVal.length)}
  </div>
  <div class="tabs">
    <button class="${estTab==='produtos'?'active':''}" onclick="estTab='produtos';renderEstoque()">Produtos</button>
@@ -1556,24 +1561,26 @@ function renderEstBody(){
  if(estTab==='produtos'){
    box.innerHTML=`<div class="card" style="margin-bottom:14px"><div class="card-pad" style="padding:12px 14px"><div class="search" style="max-width:none">${ic('search')}<input id="estBusca" value="${estBusca}" placeholder="Buscar produto…"></div></div></div>
    <div class="card"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Produto</th><th>Categoria</th><th class="num">Custo</th><th class="num">Venda</th><th class="num">Estoque</th><th>Validade</th><th></th></tr></thead><tbody>
-     ${produtos.filter(p=>!estBusca||p.nome.toLowerCase().includes(estBusca.toLowerCase())).map(p=>{const low=p.estoque<=p.min;return `<tr>
+     ${produtos.filter(p=>!estBusca||p.nome.toLowerCase().includes(estBusca.toLowerCase())).map(p=>{const est=estoqueTotal(p);const low=est<=p.min;const temLotes=p.lotes&&p.lotes.length;return `<tr>
        <td class="t-main">${p.nome}<div class="t-sub">${p.cod||''}</div></td><td><span class="tag">${p.cat}</span></td>
        <td class="num t-sub">${BRL(p.custo)}</td><td class="num">${BRL(p.preco)}</td>
-       <td class="num">${low?`<span class="badge2" style="background:var(--danger-soft);color:var(--danger)">${p.estoque} ${p.unidade}</span>`:`${p.estoque} ${p.unidade}`}</td>
-       <td class="t-sub">${p.validade?ddmmyy(p.validade):'—'}</td>
-       <td style="text-align:right"><button class="btn btn-soft btn-sm" onclick="movEstoque('${p.id}')">${ic('edit',13)} Movimentar</button></td>
+       <td class="num">${low?`<span class="badge2" style="background:var(--danger-soft);color:var(--danger)">${est} ${p.unidade}</span>`:`${est} ${p.unidade}`}</td>
+       <td class="t-sub">${temLotes?`<span class="tag">${p.lotes.length} lote(s)</span>`:(p.validade?ddmmyy(p.validade):'—')}</td>
+       <td style="text-align:right;white-space:nowrap"><button class="btn btn-ghost btn-sm" onclick="gerenciarLotes('${p.id}')">${ic('box',13)} Lotes</button> <button class="btn btn-soft btn-sm" onclick="movEstoque('${p.id}')">${ic('edit',13)} Mov.</button></td>
      </tr>`;}).join('')}
    </tbody></table></div></div>`;
    const inp=$('#estBusca');inp.addEventListener('input',e=>{estBusca=e.target.value;const v=estBusca;renderEstBody();const ni=$('#estBusca');ni.focus();ni.setSelectionRange(v.length,v.length);});
  } else if(estTab==='reposicao'){
-   const baixo=produtos.filter(p=>p.estoque<=p.min);
+   const baixo=produtos.filter(p=>estoqueTotal(p)<=p.min);
    box.innerHTML=`<div class="card"><div class="card-head"><h3>Sugestão de compra</h3><div class="sp"></div><span class="t-sub">Itens no nível mínimo ou abaixo</span></div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Produto</th><th class="num">Atual</th><th class="num">Mínimo</th><th class="num">Sugerido</th><th class="num">Custo estimado</th><th></th></tr></thead><tbody>
-     ${baixo.length?baixo.map(p=>{const sug=Math.max(p.min*2-p.estoque,p.min);return `<tr><td class="t-main">${p.nome}</td><td class="num"><span class="badge2" style="background:var(--danger-soft);color:var(--danger)">${p.estoque}</span></td><td class="num t-sub">${p.min}</td><td class="num"><b>+${sug}</b></td><td class="num">${BRL(sug*p.custo)}</td><td style="text-align:right"><button class="btn btn-soft btn-sm" onclick="entradaRapida('${p.id}',${sug})">${ic('download',13)} Dar entrada</button></td></tr>`;}).join(''):`<tr><td colspan="6">${emptyState('check','Estoque saudável','Nenhum item precisa de reposição agora 🎉')}</td></tr>`}
+     ${baixo.length?baixo.map(p=>{const est=estoqueTotal(p);const sug=Math.max(p.min*2-est,p.min);return `<tr><td class="t-main">${p.nome}</td><td class="num"><span class="badge2" style="background:var(--danger-soft);color:var(--danger)">${est}</span></td><td class="num t-sub">${p.min}</td><td class="num"><b>+${sug}</b></td><td class="num">${BRL(sug*p.custo)}</td><td style="text-align:right"><button class="btn btn-soft btn-sm" onclick="entradaRapida('${p.id}',${sug})">${ic('download',13)} Dar entrada</button></td></tr>`;}).join(''):`<tr><td colspan="6">${emptyState('check','Estoque saudável','Nenhum item precisa de reposição agora 🎉')}</td></tr>`}
    </tbody></table></div></div>`;
  } else if(estTab==='validade'){
-   const comVal=produtos.filter(p=>p.validade).sort((a,b)=>a.validade.localeCompare(b.validade));
-   box.innerHTML=`<div class="card"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Produto</th><th>Validade</th><th class="num">Estoque</th><th>Situação</th></tr></thead><tbody>
-     ${comVal.map(p=>{const d=diasEntre(hoje,p.validade);return `<tr><td class="t-main">${p.nome}</td><td>${ddmmyy(p.validade)}</td><td class="num">${p.estoque} ${p.unidade}</td><td>${d<0?'<span class="badge2" style="background:var(--danger-soft);color:var(--danger)">Vencido</span>':d<=30?`<span class="badge2" style="background:var(--gold-soft);color:var(--gold)">vence em ${d}d</span>`:'<span class="badge2" style="background:var(--ok-soft);color:var(--ok)">ok</span>'}</td></tr>`;}).join('')}
+   const linhas=[];
+   produtos.forEach(p=>{ if(p.lotes&&p.lotes.length){ p.lotes.forEach(l=>linhas.push({nome:p.nome,lote:l.lote,validade:l.validade,qtd:l.qtd,unidade:p.unidade})); } else if(p.validade){ linhas.push({nome:p.nome,lote:'—',validade:p.validade,qtd:p.estoque,unidade:p.unidade}); } });
+   linhas.sort((a,b)=>(a.validade||'9999').localeCompare(b.validade||'9999'));
+   box.innerHTML=`<div class="card"><div class="card-head"><h3>Validades por lote</h3><div class="sp"></div><span class="t-sub">Ordenado por vencimento (FEFO)</span></div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Produto</th><th>Lote</th><th>Validade</th><th class="num">Qtd</th><th>Situação</th></tr></thead><tbody>
+     ${linhas.length?linhas.map(x=>{const d=x.validade?diasEntre(hoje,x.validade):null;const sit=d==null?'—':d<0?'<span class="badge2" style="background:var(--danger-soft);color:var(--danger)">Vencido</span>':d<=30?`<span class="badge2" style="background:var(--gold-soft);color:var(--gold)">vence em ${d}d</span>`:'<span class="badge2" style="background:var(--ok-soft);color:var(--ok)">ok</span>';return `<tr><td class="t-main">${x.nome}</td><td class="t-sub">${x.lote||'—'}</td><td>${x.validade?ddmmyy(x.validade):'—'}</td><td class="num">${x.qtd} ${x.unidade}</td><td>${sit}</td></tr>`;}).join(''):`<tr><td colspan="5">${emptyState('check','Sem validades cadastradas','Cadastre lotes com validade nos produtos (botão Lotes)')}</td></tr>`}
    </tbody></table></div></div>`;
  } else {
    // Curva ABC por valor de venda (estoque*preço como proxy de relevância)
@@ -1586,6 +1593,22 @@ function renderEstBody(){
    </tbody></table></div></div>`;
  }
 }
+function estoqueTotal(p){ return (p.lotes&&p.lotes.length)? p.lotes.reduce((s,l)=>s+(l.qtd||0),0) : (p.estoque||0); }
+function syncLotes(p){ if(p.lotes&&p.lotes.length){ p.estoque=p.lotes.reduce((s,l)=>s+(l.qtd||0),0); } }
+function alertasValidade(dias){ dias=dias==null?30:dias; const hoje=todayISO(); const out=[]; db.produtos.filter(p=>p.tipo==='produto').forEach(p=>{ if(p.lotes&&p.lotes.length){ p.lotes.forEach(l=>{ if(!l.validade)return; const d=diasEntre(hoje,l.validade); if(d<0)out.push({p,l,d,sit:'vencido'}); else if(d<=dias)out.push({p,l,d,sit:'vencendo'}); }); } else if(p.validade){ const d=diasEntre(hoje,p.validade); if(d<0)out.push({p,l:null,d,sit:'vencido'}); else if(d<=dias)out.push({p,l:null,d,sit:'vencendo'}); } }); return out; }
+function baixarEstoque(p,qtd){ if(p.lotes&&p.lotes.length){ const ord=[...p.lotes].filter(l=>l.qtd>0).sort((a,b)=>(a.validade||'9999').localeCompare(b.validade||'9999')); let rest=qtd; for(const l of ord){ if(rest<=0)break; const t=Math.min(l.qtd,rest); l.qtd-=t; rest-=t; } p.lotes=p.lotes.filter(l=>l.qtd>0); syncLotes(p); } else { p.estoque=Math.max(0,(p.estoque||0)-qtd); } }
+function gerenciarLotes(id){ const p=prodOf(id); if(!p.lotes)p.lotes=[]; openModal({title:'Lotes · '+p.nome,size:'wide',body:`<div id="loteBody">${lotesBodyHTML(p)}</div>`,foot:`<button class="btn btn-primary" onclick="closeModal()">Concluir</button>`}); }
+function lotesBodyHTML(p){
+ const hoje=todayISO();
+ const ord=[...(p.lotes||[])].sort((a,b)=>(a.validade||'9999').localeCompare(b.validade||'9999'));
+ return `<div class="t-sub" style="margin-bottom:10px">Estoque total: <b>${estoqueTotal(p)} ${p.unidade}</b> · soma dos lotes (baixa automática pelo que vence primeiro)</div>
+   <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Lote</th><th>Validade</th><th class="num">Qtd</th><th>Situação</th><th></th></tr></thead><tbody>
+   ${ord.length?ord.map(l=>{const d=l.validade?diasEntre(hoje,l.validade):null;const sit=d==null?'—':d<0?'<span class="badge2" style="background:var(--danger-soft);color:var(--danger)">Vencido</span>':d<=30?`<span class="badge2" style="background:var(--gold-soft);color:var(--gold)">vence em ${d}d</span>`:'<span class="badge2" style="background:var(--ok-soft);color:var(--ok)">ok</span>';return `<tr><td class="t-main">${l.lote||'—'}</td><td>${l.validade?ddmmyy(l.validade):'—'}</td><td class="num">${l.qtd}</td><td>${sit}</td><td style="text-align:right"><button class="btn btn-icon btn-ghost btn-sm" style="color:var(--danger)" onclick="removerLote('${p.id}','${l.id}')">${ic('trash',13)}</button></td></tr>`;}).join(''):`<tr><td colspan="5" class="t-sub" style="padding:14px">Nenhum lote cadastrado ainda.</td></tr>`}
+   </tbody></table></div>
+   <div class="card-pad" style="background:var(--surface-2);border-radius:12px;margin-top:12px"><div class="frow-3"><div class="field" style="margin:0"><label>Nº do lote</label><input class="inp" id="loNum" placeholder="ex: L2406"></div><div class="field" style="margin:0"><label>Validade</label><input type="date" class="inp" id="loVal"></div><div class="field" style="margin:0"><label>Quantidade</label><input class="inp" type="number" id="loQtd" value="1"></div></div><button class="btn btn-soft btn-sm" style="margin-top:10px" onclick="adicionarLote('${p.id}')">${ic('plus',13)} Adicionar lote</button></div>`;
+}
+function adicionarLote(id){ const p=prodOf(id); const lote=$('#loNum').value.trim(),validade=$('#loVal').value,qtd=parseInt($('#loQtd').value)||0; if(qtd<=0){toast('Informe a quantidade','err');return;} if(!p.lotes)p.lotes=[]; p.lotes.push({id:uid('lt'),lote,validade,qtd}); syncLotes(p); save(); $('#loteBody').innerHTML=lotesBodyHTML(p); renderNav(); toast('Lote adicionado ✓'); }
+function removerLote(id,lid){ const p=prodOf(id); p.lotes=(p.lotes||[]).filter(l=>l.id!==lid); syncLotes(p); save(); $('#loteBody').innerHTML=lotesBodyHTML(p); renderNav(); toast('Lote removido'); }
 function movEstoque(id){
  const p=prodOf(id);
  const body=`<div style="text-align:center;padding:4px 0 14px"><b style="font-size:16px">${p.nome}</b><div class="t-sub">Estoque atual: ${p.estoque} ${p.unidade}</div></div>
@@ -2420,7 +2443,7 @@ function faturarOrcamento(id){
  const o=db.orcamentos.find(x=>x.id===id);
  const venda={id:novoId('vd'),data:todayISO(),clienteId:o.clienteId,profId:o.profId,itens:o.itens,pagamentos:[{forma:'A definir',valor:o.total}],total:o.total,status:'pago',origem:'orcamento'};
  db.vendas.push(venda);
- o.itens.forEach(i=>{const p=db.produtos.find(x=>x.nome===i.nome);if(p&&p.tipo==='produto'&&p.estoque!=null)p.estoque=Math.max(0,p.estoque-i.qtd);});
+ o.itens.forEach(i=>{const p=db.produtos.find(x=>x.nome===i.nome);if(p&&p.tipo==='produto'&&p.estoque!=null)baixarEstoque(p,i.qtd);});
  const regOrc={id:novoId('f'),tipo:'receita',desc:'Orçamento faturado — '+(cli(o.clienteId)?.nome||''),cat:'Serviços',valor:o.total,venc:todayISO(),pago:true,forma:'A definir',formaId:'fp_pixc6',contaId:'ct_c6',data:todayISO()};
  db.financeiro.push(regOrc);
  o.status='faturado';save();persistirVenda(venda);persistirFinanceiro(regOrc);closeModal();toast('Orçamento faturado · '+BRL(o.total)+' ✓');renderNav();renderOrcamentos();
