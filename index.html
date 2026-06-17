@@ -649,6 +649,38 @@ const NAV=[
 ];
 let curView='dash';
 const usuarioAtual=()=>db.usuarios[0];
+/* ---------------- Perfis & permissões ---------------- */
+let papelOverride=null;
+const PERMS={
+ dono:'*',
+ veterinario:['dash','agenda','clientes','prontuario','documentos','internacao','vacinas','estetica','pdv','orcamentos','catalogo','estoque','planos','mensagens','retencao'],
+ recepcao:['dash','agenda','clientes','estetica','pdv','orcamentos','vacinas','mensagens']
+};
+const PAPEL_LB={dono:'Dono / Admin',veterinario:'Veterinário',recepcao:'Recepção'};
+function papelReal(){ const p=(membroAtual&&membroAtual.papel)||(db.usuarios[0]&&db.usuarios[0].perfil)||'dono'; return p==='admin'?'dono':p; }
+function papelAtual(){ return papelOverride||papelReal(); }
+function ehDono(){ return papelAtual()==='dono'; }
+function permsDe(papel){ if(papel==='dono')return '*'; const cp=db.config&&db.config.perms&&db.config.perms[papel]; return cp||PERMS[papel]||[]; }
+function podeVer(view){ const p=permsDe(papelAtual()); return p==='*'||(Array.isArray(p)&&p.includes(view)); }
+function setPapelOverride(v){ papelOverride=v||null; renderShell(); go('dash'); }
+function matrizPermsHTML(){
+ const mods=[]; NAV.forEach(g=>g.items.forEach(it=>mods.push(it)));
+ const perfis=[['veterinario','Veterinário'],['recepcao','Recepção']];
+ return `<div class="card" style="margin-top:14px;max-width:620px"><div class="card-head"><h3>Permissões por perfil</h3><div class="sp"></div><button class="btn btn-ghost btn-sm" onclick="resetPerms()">Restaurar padrão</button></div>
+   <div class="card-pad">
+     <div class="t-sub" style="margin-bottom:10px">Marque o que cada perfil pode acessar. O Painel fica sempre disponível e o Dono tem acesso total.</div>
+     <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Módulo</th>${perfis.map(p=>`<th style="text-align:center">${p[1]}</th>`).join('')}</tr></thead><tbody>
+       ${mods.map(it=>`<tr><td><div class="cellflex" style="gap:7px"><span style="color:var(--muted)">${ic(it.ic,14)}</span>${it.lb}</div></td>${perfis.map(p=>{const a=permsDe(p[0]);const on=a==='*'||a.includes(it.id);const lock=it.id==='dash';return `<td style="text-align:center"><input type="checkbox" style="width:17px;height:17px;cursor:pointer" data-perfil="${p[0]}" data-mod="${it.id}" ${on?'checked':''} ${lock?'disabled':''}></td>`;}).join('')}</tr>`).join('')}
+     </tbody></table></div>
+     <button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="salvarPerms()">${ic('check',14)} Salvar permissões</button>
+   </div></div>`;
+}
+function salvarPerms(){
+ const perms={veterinario:['dash'],recepcao:['dash']};
+ $$('#content input[type=checkbox][data-perfil]').forEach(cb=>{ if(cb.checked){ const pf=cb.dataset.perfil,m=cb.dataset.mod; if(perms[pf]&&!perms[pf].includes(m))perms[pf].push(m); } });
+ db.config.perms=perms; save(); toast('Permissões salvas ✓'); renderShell(); go('config');
+}
+function resetPerms(){ if(!confirm('Restaurar as permissões padrão dos perfis?'))return; delete db.config.perms; save(); toast('Permissões restauradas ao padrão'); renderShell(); go('config'); }
 
 function badgeFor(id){
  if(id==='agenda'){const n=db.agendamentos.filter(a=>a.data===todayISO()&&['agendado','confirmado','atendimento'].includes(a.status)).length;return n||'';}
@@ -678,9 +710,10 @@ function renderShell(){
    </div>
    <div class="sb-scroll" id="navList"></div>
    <div class="sb-foot">
-     <button class="sb-user" onclick="go('config')">
+     ${papelReal()==='dono'?`<div style="padding:8px 10px;margin-bottom:8px;background:var(--surface-2);border-radius:10px"><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:4px">Ver como</div><select class="sel" style="padding:6px 8px;font-size:12.5px" onchange="setPapelOverride(this.value)"><option value="" ${!papelOverride?'selected':''}>Meu acesso (Dono)</option><option value="veterinario" ${papelOverride==='veterinario'?'selected':''}>Veterinário</option><option value="recepcao" ${papelOverride==='recepcao'?'selected':''}>Recepção</option></select></div>`:''}
+     <button class="sb-user" onclick="${podeVer('config')?"go('config')":"toast('Acesso restrito ao Dono/Admin','err')"}">
        <div class="av">${initials(u.nome)}</div>
-       <div class="nm"><b>${u.nome}</b><span>${({admin:'Administradora',veterinario:'Veterinário',recepcao:'Recepção'})[u.perfil]}</span></div>
+       <div class="nm"><b>${u.nome}</b><span>${PAPEL_LB[papelAtual()]||'Equipe'}${papelOverride?' (prévia)':''}</span></div>
      </button>
    </div>
   </aside>
@@ -702,13 +735,15 @@ function renderShell(){
  $('#globalSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){go('clientes');setTimeout(()=>{const i=$('#cliBusca');if(i){i.value=e.target.value;i.dispatchEvent(new Event('input'));}},50);}});
 }
 function renderNav(){
- $('#navList').innerHTML=NAV.map(grp=>`
-  <div class="sb-group">${grp.g}</div>
-  ${grp.items.map(it=>{const b=badgeFor(it.id);return `<button class="sb-link${curView===it.id?' active':''}" onclick="go('${it.id}')">${ic(it.ic)}<span>${it.lb}</span>${b?`<span class="badge">${b}</span>`:''}</button>`;}).join('')}
- `).join('');
+ $('#navList').innerHTML=NAV.map(grp=>{
+  const items=grp.items.filter(it=>podeVer(it.id));
+  if(!items.length)return '';
+  return `<div class="sb-group">${grp.g}</div>
+  ${items.map(it=>{const b=badgeFor(it.id);return `<button class="sb-link${curView===it.id?' active':''}" onclick="go('${it.id}')">${ic(it.ic)}<span>${it.lb}</span>${b?`<span class="badge">${b}</span>`:''}</button>`;}).join('')}`;
+ }).join('');
 }
 function toggleSidebar(open){$('#sidebar').classList.toggle('open',open);$('#scrim').classList.toggle('hide',!open);}
-function go(view){curView=view;renderNav();toggleSidebar(false);window.scrollTo(0,0);renderView();}
+function go(view){ if(!podeVer(view)){toast('Seu perfil não tem acesso a essa área','err');view='dash';} curView=view;renderNav();toggleSidebar(false);window.scrollTo(0,0);renderView();}
 function renderView(){
  const map={dash:renderDash,agenda:renderAgenda,clientes:renderClientes,prontuario:renderProntuario,documentos:renderDocumentos,internacao:renderInternacao,vacinas:renderVacinas,estetica:renderEstetica,pdv:renderPDV,orcamentos:renderOrcamentos,catalogo:renderCatalogo,estoque:renderEstoque,financeiro:renderFinanceiro,planos:renderPlanos,mensagens:renderMensagens,retencao:renderRetencao,relatorios:renderRelatorios,config:renderConfig};
  (map[curView]||renderDash)();
@@ -796,14 +831,14 @@ function renderDash(){
  $('#content').innerHTML=`
  ${phead('Olá, '+usuarioAtual().nome.split(' ')[0]+'! 👋',longDate(t)+' · Aqui está o resumo da sua clínica.','<button class="btn btn-primary" onclick="openNovoAgend()">'+ic('plus',15)+' Agendar</button>')}
  <div class="kpis">
-   ${kpi('money','teal','Faturamento hoje',BRL(fatHoje),{dir:'up',v:'12%'})}
+   ${ehDono()?kpi('money','teal','Faturamento hoje',BRL(fatHoje),{dir:'up',v:'12%'}):kpi('vacina','teal','Vacinas a vencer',String(vacinasPendentes().length))}
    ${kpi('agenda','info','Agendamentos hoje',agsHoje.length+' · '+finHoje.length+' concluídos')}
-   ${kpi('cart','coral','Ticket médio',BRL(ticket))}
+   ${ehDono()?kpi('cart','coral','Ticket médio',BRL(ticket)):kpi('paciente','coral','Clientes ativos',String(db.clientes.length))}
    ${kpi('internacao','purple','Internados',internados+' pacientes')}
  </div>
  <div class="cols-2">
    <div class="flex-col">
-     <div class="card">
+     <div class="card" id="dFatChart">
        <div class="card-head"><h3>Faturamento · últimos 7 dias</h3><div class="sp"></div><span class="tag">${BRL(serie.reduce((s,x)=>s+x.v,0))} no período</span></div>
        <div class="card-pad">
          <div class="mini-bars">
@@ -825,7 +860,7 @@ function renderDash(){
      </div>
    </div>
    <div class="flex-col">
-     <div class="card card-pad">
+     <div class="card card-pad" id="dMeta">
        <div class="between" style="margin-bottom:14px"><h3 style="font-size:15.5px">Meta do mês</h3><span class="badge2" style="background:var(--brand-soft);color:var(--brand-700)">${pctMeta}%</span></div>
        <div style="font-family:'Plus Jakarta Sans';font-size:26px;font-weight:800;letter-spacing:-.02em">${BRL(fatMes)}</div>
        <div class="t-sub" style="margin-bottom:12px">de ${BRL(meta)} previstos</div>
@@ -843,6 +878,7 @@ function renderDash(){
      </button>
    </div>
  </div>`;
+ if(!ehDono()){['dFatChart','dMeta'].forEach(idd=>{const el=$('#'+idd);if(el)el.remove();});}
 }
 
 /* ============================================================
@@ -1805,13 +1841,40 @@ function renderCfgBody(){
      ${db.profissionais.map(p=>`<tr><td><div class="cellflex"><div class="av-pet" style="width:34px;height:34px;background:${p.cor}22;color:${p.cor};font-weight:700;font-size:12px">${initials(p.nome)}</div><b>${p.nome}</b></div></td><td>${p.papel}</td><td class="t-sub">${p.crmv||'—'}</td><td class="num">${p.comissao}%</td></tr>`).join('')}
    </tbody></table></div></div>`;
  } else if(cfgTab==='usuarios'){
-   const perm={admin:'Acesso total',veterinario:'Clínico + agenda + atendimentos',recepcao:'Agenda, clientes, PDV e caixa'};
-   box.innerHTML=`<div class="card"><div class="card-head"><h3>Usuários do sistema</h3></div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Usuário</th><th>E-mail</th><th>Perfil</th><th>Permissões</th></tr></thead><tbody>
-     ${db.usuarios.map(u=>`<tr><td><div class="cellflex"><div class="av-pet" style="width:34px;height:34px;background:var(--brand-soft);color:var(--brand-700);font-weight:700;font-size:12px">${initials(u.nome)}</div><b>${u.nome}</b></div></td><td class="t-sub">${u.email}</td><td><span class="badge2" style="background:var(--brand-soft);color:var(--brand-700)">${u.perfil}</span></td><td class="t-sub">${perm[u.perfil]}</td></tr>`).join('')}
-   </tbody></table></div></div>
-   <div class="card card-pad" style="margin-top:14px;max-width:520px"><h4 style="font-size:14px;margin-bottom:10px">Perfis de acesso</h4>
-     ${Object.entries(perm).map(([k,v])=>`<div class="between" style="padding:9px 0;border-bottom:1px solid var(--line-2)"><b style="text-transform:capitalize">${k}</b><span class="t-sub">${v}</span></div>`).join('')}
-   </div>`;
+   const perm={dono:'Acesso total (financeiro, relatórios, config)',veterinario:'Clínico, agenda, PDV, orçamentos, estoque',recepcao:'Agenda, clientes, PDV e caixa'};
+   if(supaOn()){
+     if(!eqCarregado&&!eqCarregando)carregarEquipe();
+     const meuId=membroAtual?membroAtual.user_id:null;
+     box.innerHTML=`
+       <div class="card"><div class="card-head"><h3>Equipe da clínica</h3><div class="sp"></div><button class="btn btn-ghost btn-sm" onclick="carregarEquipe()">${ic('repeat',13)} Atualizar</button></div>
+       <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Membro</th><th>Perfil</th><th></th></tr></thead><tbody>
+         ${eqCarregando&&!eqMembros.length?`<tr><td colspan="3" class="t-sub" style="padding:18px">Carregando equipe…</td></tr>`:
+           eqMembros.map(m=>{const eu=m.user_id===meuId;return `<tr>
+             <td><div class="cellflex"><div class="av-pet" style="width:34px;height:34px;background:var(--brand-soft);color:var(--brand-700);font-weight:700;font-size:12px">${initials(m.nome||'?')}</div><div><b>${m.nome||'—'}</b>${eu?' <span class="t-sub">(você)</span>':''}</div></div></td>
+             <td><select class="sel" style="padding:6px 8px;max-width:170px" ${eu?'disabled':''} onchange="mudarPapelMembro('${m.id}',this.value)">${Object.keys(PAPEL_LB).map(k=>`<option value="${k}" ${m.papel===k?'selected':''}>${PAPEL_LB[k]}</option>`).join('')}</select></td>
+             <td style="text-align:right">${eu?'':`<button class="btn btn-icon btn-ghost btn-sm" style="color:var(--danger)" onclick="removerMembro('${m.id}')">${ic('trash',13)}</button>`}</td>
+           </tr>`;}).join('')}
+       </tbody></table></div></div>
+
+       <div class="card card-pad" style="margin-top:14px;max-width:560px"><h4 style="font-size:14px;margin-bottom:10px">${ic('plus',14)} Convidar pessoa</h4>
+         <div class="frow"><div class="field" style="margin:0;flex:1.4"><label>E-mail</label><input class="inp" id="cvEmail" type="email" placeholder="pessoa@email.com"></div>
+         <div class="field" style="margin:0"><label>Perfil</label><select class="sel" id="cvPapel"><option value="recepcao">Recepção</option><option value="veterinario">Veterinário</option><option value="dono">Dono / Admin</option></select></div></div>
+         <button class="btn btn-primary btn-sm" id="cvBtn" style="margin-top:10px" onclick="convidarMembro()">${ic('check',14)} Gerar convite</button>
+         <div class="t-sub" style="margin-top:8px;display:flex;align-items:center;gap:6px">${ic('alert',13)} A pessoa se cadastra no Vetória e usa o código gerado para entrar já no perfil certo.</div>
+       </div>
+
+       ${eqConvites.length?`<div class="card" style="margin-top:14px;max-width:560px"><div class="card-head"><h3>Convites pendentes</h3></div>
+         <div class="tbl-wrap"><table class="tbl"><thead><tr><th>E-mail</th><th>Perfil</th><th>Código</th><th></th></tr></thead><tbody>
+           ${eqConvites.map(cv=>`<tr><td class="t-main">${cv.email}</td><td><span class="tag">${PAPEL_LB[cv.papel]||cv.papel}</span></td>
+             <td><button class="btn btn-soft btn-sm" onclick="copiarCodigo('${cv.codigo}')" style="font-family:monospace;font-weight:700">${cv.codigo} ${ic('doc',12)}</button></td>
+             <td style="text-align:right"><button class="btn btn-icon btn-ghost btn-sm" style="color:var(--danger)" onclick="cancelarConvite('${cv.id}')">${ic('trash',13)}</button></td></tr>`).join('')}
+         </tbody></table></div></div>`:''}
+
+       ${matrizPermsHTML()}`;
+   } else {
+     box.innerHTML=`<div style="padding:12px 14px;background:var(--gold-soft);border-radius:12px;margin-bottom:16px;font-size:13px;display:flex;align-items:center;gap:9px">${ic('alert',16)} <span>A gestão de equipe (convites e perfis) funciona no modo nuvem, com login. No modo demonstração os perfis abaixo são apenas ilustrativos.</span></div>
+       ${matrizPermsHTML()}`;
+   }
  } else if(cfgTab==='catalogo'){
    const servicos=db.produtos.filter(p=>p.tipo==='servico');
    box.innerHTML=`<div class="card"><div class="card-head"><h3>Serviços oferecidos</h3><div class="sp"></div><button class="btn btn-soft btn-sm" onclick="openNovoProduto()">${ic('plus',13)} Novo serviço</button></div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Serviço</th><th>Categoria</th><th class="num">Preço</th></tr></thead><tbody>
@@ -2012,16 +2075,55 @@ async function fazerLogin(){ const email=$('#auEmail').value.trim(),senha=$('#au
 async function fazerCadastro(){ const email=$('#auEmail').value.trim(),senha=$('#auSenha').value,nome=($('#auNome')?$('#auNome').value.trim():''); if(!email||!senha){toast('Preencha e-mail e senha','err');return;} if(senha.length<6){toast('Senha de no mínimo 6 caracteres','err');return;} $('#auBtn').textContent='Criando…';
   try{ const {data,error}=await sb.auth.signUp({email,password:senha}); if(error)throw error; sessionStorage.setItem('vet_nome',nome||''); if(!data.session){ toast('Conta criada! Confirme o e-mail (se exigido) e faça login.'); renderAuth('login'); return; } iniciar(); }catch(err){ toast(err.message||'Falha no cadastro','err'); if($('#auBtn'))$('#auBtn').textContent='Criar conta'; } }
 function renderOnboarding(){ $('#app').innerHTML=`<div style="min-height:100vh;display:grid;place-items:center;background:var(--bg);padding:20px">
-    <div class="card" style="width:100%;max-width:400px;padding:30px 26px">
-      <div style="font-family:'Plus Jakarta Sans';font-weight:800;font-size:20px;margin-bottom:4px">Vamos criar sua clínica</div>
-      <div class="t-sub" style="margin-bottom:18px">Esse será o espaço dos seus dados, isolado de qualquer outra clínica.</div>
-      <div class="field"><label>Nome da clínica</label><input class="inp" id="obNome" placeholder="Ex: Clínica Vet Aracaju"></div>
+    <div class="card" style="width:100%;max-width:420px;padding:30px 26px">
+      <div style="font-family:'Plus Jakarta Sans';font-weight:800;font-size:20px;margin-bottom:4px">Bem-vindo ao Vetória</div>
+      <div class="t-sub" style="margin-bottom:18px">Entre na clínica que te convidou ou crie a sua.</div>
       <div class="field"><label>Seu nome</label><input class="inp" id="obMeu" value="${sessionStorage.getItem('vet_nome')||''}" placeholder="Seu nome"></div>
-      <button class="btn btn-primary" style="width:100%;margin-top:6px" id="obBtn" onclick="criarClinica()">Criar e começar</button>
+      <div style="background:var(--surface-2);border-radius:12px;padding:14px;margin-bottom:16px">
+        <div style="font-weight:600;font-size:13.5px;margin-bottom:8px">Tenho um código de convite</div>
+        <div class="flex" style="gap:8px"><input class="inp" id="obCodigo" placeholder="Ex: A1B2C3D4" style="flex:1;text-transform:uppercase"><button class="btn btn-primary" id="obCodBtn" onclick="aceitarConviteOnb()">Entrar</button></div>
+      </div>
+      <div style="text-align:center;color:var(--muted);font-size:12px;margin:6px 0 14px">— ou —</div>
+      <div style="font-weight:600;font-size:13.5px;margin-bottom:8px">Criar uma nova clínica</div>
+      <div class="field"><label>Nome da clínica</label><input class="inp" id="obNome" placeholder="Ex: Clínica Vet Aracaju"></div>
+      <button class="btn btn-soft" style="width:100%" id="obBtn" onclick="criarClinica()">${ic('plus',14)} Criar clínica e começar</button>
     </div></div>`; }
 async function criarClinica(){ const nome=$('#obNome').value.trim(),meu=$('#obMeu').value.trim(); if(!nome){toast('Informe o nome da clínica','err');return;} $('#obBtn').textContent='Criando…';
   try{ const {error}=await sb.rpc('criar_clinica',{p_nome:nome,p_meu_nome:meu||null}); if(error)throw error; sessionStorage.removeItem('vet_nome'); iniciar(); }catch(err){ toast(err.message||'Falha ao criar clínica','err'); if($('#obBtn'))$('#obBtn').textContent='Criar e começar'; } }
 function entrarDemo(){ modoDemo=true; renderShell(); go('dash'); }
+
+// ---- gestão de equipe ----
+let eqMembros=[], eqConvites=[], eqCarregando=false, eqCarregado=false;
+async function carregarEquipe(){
+ if(!supaOn())return;
+ eqCarregando=true;
+ try{
+   const { data:m } = await sb.from('membros').select('*').eq('clinica_id',clinicaAtual).order('criado_em',{ascending:true});
+   eqMembros=m||[];
+   const { data:cv } = await sb.from('convites').select('*').eq('clinica_id',clinicaAtual).eq('usado',false).order('criado_em',{ascending:false});
+   eqConvites=cv||[];
+ }catch(e){ console.error('carregarEquipe',e); }
+ eqCarregando=false; eqCarregado=true;
+ if(curView==='config'&&cfgTab==='usuarios')renderConfig();
+}
+async function convidarMembro(){
+ const email=$('#cvEmail').value.trim(), papel=$('#cvPapel').value;
+ if(!email){toast('Informe o e-mail','err');return;}
+ const btn=$('#cvBtn'); if(btn)btn.textContent='Gerando…';
+ try{ const { data, error } = await sb.rpc('criar_convite',{p_email:email,p_papel:papel}); if(error)throw error; $('#cvEmail').value=''; toast('Convite criado · código '+data); await carregarEquipe(); }
+ catch(e){ toast(e.message||'Falha ao convidar','err'); if(btn)btn.textContent='Gerar convite'; }
+}
+async function mudarPapelMembro(id,papel){ try{ const { error } = await sb.from('membros').update({papel}).eq('id',id); if(error)throw error; toast('Perfil atualizado ✓'); await carregarEquipe(); }catch(e){ toast(e.message||'Falha','err'); } }
+async function removerMembro(id){ if(!confirm('Remover este membro da clínica? Ele perde o acesso.'))return; try{ const { error } = await sb.from('membros').delete().eq('id',id); if(error)throw error; toast('Membro removido'); await carregarEquipe(); }catch(e){ toast(e.message||'Falha','err'); } }
+async function cancelarConvite(id){ try{ await sb.from('convites').delete().eq('id',id); toast('Convite cancelado'); await carregarEquipe(); }catch(e){ console.error(e); } }
+function copiarCodigo(cod){ try{ navigator.clipboard.writeText(cod); }catch(e){} toast('Código copiado: '+cod); }
+async function aceitarConviteOnb(){
+ const cod=$('#obCodigo').value.trim(); if(!cod){toast('Informe o código do convite','err');return;}
+ const nome=($('#obMeu')?$('#obMeu').value.trim():'');
+ const btn=$('#obCodBtn'); if(btn)btn.textContent='Entrando…';
+ try{ const { error } = await sb.rpc('aceitar_convite',{p_codigo:cod,p_nome:nome||null}); if(error)throw error; sessionStorage.removeItem('vet_nome'); iniciar(); }
+ catch(e){ toast(e.message||'Código inválido','err'); if(btn)btn.textContent='Entrar com convite'; }
+}
 async function sairConta(){ try{ if(sb) await sb.auth.signOut(); }catch(e){} clinicaAtual=null; membroAtual=null; location.reload(); }
 
 // ---- BOOT ----
