@@ -339,7 +339,7 @@ const SUPA_URL='https://nrntinlwmsxxugmxxoud.supabase.co';
 const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ybnRpbmx3bXN4eHVnbXh4b3VkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1OTIwNDEsImV4cCI6MjA5NzE2ODA0MX0.AkZZUbomQQp3idmlzSflngFdwUiI-kD7Kr_EzwISX_w';
 let sb=null; try{ if(typeof window!=='undefined'&&window.supabase&&SUPA_URL&&SUPA_KEY){ sb=window.supabase.createClient(SUPA_URL,SUPA_KEY,{auth:{persistSession:true,autoRefreshToken:true}}); } }catch(e){ console.warn('Supabase init falhou:',e); }
 let modoDemo=false, clinicaAtual=null, membroAtual=null, _snap={}, _syncTimer=null;
-let assinatura={plano:'trial',status:'trial',trial_fim:null};
+let assinatura={plano:'trial',status:'trial',trial_fim:null,recursos:{}};
 function diasTrial(){ return assinatura.trial_fim? diasEntre(todayISO(),assinatura.trial_fim) : null; }
 function acessoLiberado(){ if(!supaOn())return true; if(assinatura.status==='ativo')return true; if(assinatura.status==='trial'){ const d=diasTrial(); return d===null||d>=0; } return false; }
 const COL_TIPOS=['profissionais','produtos','agendamentos','internacoes','documentos','orcamentos','planos','assinaturas'];
@@ -674,6 +674,14 @@ function papelAtual(){ return papelOverride||papelReal(); }
 function ehDono(){ return papelAtual()==='dono'; }
 function permsDe(papel){ if(papel==='dono')return '*'; const cp=db.config&&db.config.perms&&db.config.perms[papel]; return cp||PERMS[papel]||[]; }
 function podeVer(view){ const p=permsDe(papelAtual()); return p==='*'||(Array.isArray(p)&&p.includes(view)); }
+const _ALLVIEWS=['dash','agenda','clientes','prontuario','documentos','internacao','vacinas','estetica','pdv','orcamentos','catalogo','estoque','financeiro','planos','mensagens','retencao','relatorios','config'];
+const PLANO_VIEWS={
+ volante:['dash','agenda','clientes','prontuario','documentos','vacinas','catalogo','financeiro','mensagens','config'],
+ essencial:['dash','agenda','clientes','prontuario','documentos','vacinas','catalogo','financeiro','mensagens','config','estetica','pdv','orcamentos','estoque','planos','retencao','relatorios'],
+ pro:_ALLVIEWS, rede:_ALLVIEWS
+};
+function nivelPlano(){ if(!supaOn())return 9; if(assinatura&&assinatura.status==='trial')return 9; return ({volante:1,essencial:2,pro:3,rede:4})[assinatura&&assinatura.plano]||9; }
+function planoLibera(view){ if(!supaOn())return true; if(view==='dash'||view==='config')return true; const ov=(assinatura&&assinatura.recursos)||{}; if(Object.prototype.hasOwnProperty.call(ov,view))return !!ov[view]; if(assinatura&&assinatura.status==='trial')return true; const lista=PLANO_VIEWS[assinatura&&assinatura.plano]||PLANO_VIEWS.pro; return lista.indexOf(view)>=0; }
 function setPapelOverride(v){ papelOverride=v||null; renderShell(); go('dash'); }
 function toggleVerComo(e){ if(e)e.stopPropagation(); const l=$('#vcList'); if(!l)return; const aberto=l.style.display==='block'; l.style.display=aberto?'none':'block'; if(!aberto){ setTimeout(()=>document.addEventListener('click',fecharVerComo),0); } }
 function fecharVerComo(){ const l=$('#vcList'); if(l)l.style.display='none'; document.removeEventListener('click',fecharVerComo); }
@@ -787,14 +795,14 @@ function renderShell(){
 }
 function renderNav(){
  $('#navList').innerHTML=NAV.map(grp=>{
-  const items=grp.items.filter(it=>podeVer(it.id));
+  const items=grp.items.filter(it=>podeVer(it.id)&&planoLibera(it.id));
   if(!items.length)return '';
   return `<div class="sb-group">${grp.g}</div>
   ${items.map(it=>{const b=badgeFor(it.id);return `<button class="sb-link${curView===it.id?' active':''}" onclick="go('${it.id}')">${ic(it.ic)}<span>${it.lb}</span>${b?`<span class="badge">${b}</span>`:''}</button>`;}).join('')}`;
  }).join('');
 }
 function toggleSidebar(open){$('#sidebar').classList.toggle('open',open);$('#scrim').classList.toggle('hide',!open);}
-function go(view){ if(!podeVer(view)){toast('Seu perfil não tem acesso a essa área','err');view='dash';} curView=view;renderNav();toggleSidebar(false);window.scrollTo(0,0);renderView();}
+function go(view){ if(!podeVer(view)){toast('Seu perfil não tem acesso a essa área','err');view='dash';} else if(!planoLibera(view)){toast('Esse recurso está disponível em outro plano','err');view='dash';} curView=view;renderNav();toggleSidebar(false);window.scrollTo(0,0);renderView();}
 function renderView(){
  const map={dash:renderDash,agenda:renderAgenda,clientes:renderClientes,prontuario:renderProntuario,documentos:renderDocumentos,internacao:renderInternacao,vacinas:renderVacinas,estetica:renderEstetica,pdv:renderPDV,orcamentos:renderOrcamentos,catalogo:renderCatalogo,estoque:renderEstoque,financeiro:renderFinanceiro,planos:renderPlanos,mensagens:renderMensagens,retencao:renderRetencao,relatorios:renderRelatorios,config:renderConfig};
  (map[curView]||renderDash)();
@@ -1774,7 +1782,7 @@ function exportarComissoes(fmt){
 }
 function exportarRecebiveis(){ const rec=(db.financeiro||[]).filter(f=>f.tipo==='receita'&&f.pago&&f.liberacao&&f.liberacao>todayISO()).sort((a,b)=>a.liberacao.localeCompare(b.liberacao)); baixarCSV('Recebiveis_a_liberar',['Libera em','Origem','Forma','Conta','Bruto','Liquido'],rec.map(f=>[ddmmyy(f.liberacao),f.desc||'',f.forma||'',contaOf(f.contaId)?contaOf(f.contaId).nome:'',csvNum(f.valor),csvNum(f.liquido!=null?f.liquido:f.valor)])); }
 let finTab='fluxo';
-function renderFinanceiro(){
+function renderFinanceiro(){ if((finTab==='dre'||finTab==='projecao')&&nivelPlano()<3)finTab='fluxo'; if(['receber','pagar','caixa','contas','comissoes'].indexOf(finTab)>=0&&nivelPlano()<2)finTab='fluxo';
  const M=new Date().getMonth();
  const noMes=db.financeiro.filter(f=>parseISO(f.venc).getMonth()===M);
  const receitas=noMes.filter(f=>f.tipo==='receita');
@@ -1794,13 +1802,13 @@ function renderFinanceiro(){
  </div>
  <div class="tabs">
    <button class="${finTab==='fluxo'?'active':''}" onclick="finTab='fluxo';renderFinanceiro()">Fluxo de caixa</button>
-   <button class="${finTab==='projecao'?'active':''}" onclick="finTab='projecao';renderFinanceiro()">Projeção</button>
-   <button class="${finTab==='dre'?'active':''}" onclick="finTab='dre';renderFinanceiro()">DRE</button>
-   <button class="${finTab==='receber'?'active':''}" onclick="finTab='receber';renderFinanceiro()">A receber</button>
-   <button class="${finTab==='pagar'?'active':''}" onclick="finTab='pagar';renderFinanceiro()">A pagar</button>
-   <button class="${finTab==='caixa'?'active':''}" onclick="finTab='caixa';renderFinanceiro()">Caixa do dia</button>
-   <button class="${finTab==='contas'?'active':''}" onclick="finTab='contas';renderFinanceiro()">Contas & formas</button>
-   <button class="${finTab==='comissoes'?'active':''}" onclick="finTab='comissoes';renderFinanceiro()">Comissões</button>
+   ${nivelPlano()>=3?`<button class="${finTab==='projecao'?'active':''}" onclick="finTab='projecao';renderFinanceiro()">Projeção</button>`:''}
+   ${nivelPlano()>=3?`<button class="${finTab==='dre'?'active':''}" onclick="finTab='dre';renderFinanceiro()">DRE</button>`:''}
+   ${nivelPlano()>=2?`<button class="${finTab==='receber'?'active':''}" onclick="finTab='receber';renderFinanceiro()">A receber</button>`:''}
+   ${nivelPlano()>=2?`<button class="${finTab==='pagar'?'active':''}" onclick="finTab='pagar';renderFinanceiro()">A pagar</button>`:''}
+   ${nivelPlano()>=2?`<button class="${finTab==='caixa'?'active':''}" onclick="finTab='caixa';renderFinanceiro()">Caixa do dia</button>`:''}
+   ${nivelPlano()>=2?`<button class="${finTab==='contas'?'active':''}" onclick="finTab='contas';renderFinanceiro()">Contas & formas</button>`:''}
+   ${nivelPlano()>=2?`<button class="${finTab==='comissoes'?'active':''}" onclick="finTab='comissoes';renderFinanceiro()">Comissões</button>`:''}
  </div>
  <div id="finBody"></div>`;
  renderFinBody();
@@ -2168,7 +2176,7 @@ async function carregarClinica(){
     if(e1) throw e1;
     if(!membros||!membros.length) return false;
     membroAtual=membros[0]; clinicaAtual=membroAtual.clinica_id;
-    try{ const { data:clRow } = await sb.from('clinicas').select('plano,status,trial_fim,nome').eq('id',clinicaAtual).single(); if(clRow){ assinatura={plano:clRow.plano||'trial',status:clRow.status||'trial',trial_fim:clRow.trial_fim||null}; } }catch(e){ console.warn('assinatura',e); }
+    try{ const { data:clRow } = await sb.from('clinicas').select('plano,status,trial_fim,nome,recursos').eq('id',clinicaAtual).single(); if(clRow){ assinatura={plano:clRow.plano||'trial',status:clRow.status||'trial',trial_fim:clRow.trial_fim||null,recursos:(clRow.recursos&&typeof clRow.recursos==='object')?clRow.recursos:{}}; } }catch(e){ console.warn('assinatura',e); }
     db.usuarios=[{ id:user.id, nome:membroAtual.nome||user.email, perfil:membroAtual.papel||'dono', email:user.email }];
     const { data:cls, error:e2 } = await sb.from('clientes').select('*').eq('clinica_id',clinicaAtual);
     if(e2) throw e2;
@@ -2396,7 +2404,58 @@ function renderBloqueioTrial(){
    <div style="margin-top:12px"><a href="#" onclick="if(confirm('Sair da conta?'))sairConta();return false" class="t-sub" style="text-decoration:underline">Sair da conta</a></div>
  </div></div>`;
 }
-function assinarAgora(){ toast('Assinatura em breve — em instantes ligamos o pagamento aqui.'); }
+let cicloPlano='mes';
+const PLANOS_ZV=[
+ {id:'volante',nome:'Volante',sub:'Vet autônomo / a domicílio',ic:'truck',mes:56,ano:560,feats:['Agenda e prontuário','Receituário e vacinas','Lembretes no WhatsApp','1 profissional']},
+ {id:'essencial',nome:'Essencial',sub:'Pet shop / clínica',ic:'building',pop:true,mes:190,ano:1900,feats:['Tudo do Volante, e mais:','PDV e estoque com lote','Banho & tosa + agenda online','Profissionais ilimitados']},
+ {id:'pro',nome:'Pro',sub:'Clínica completa / hospital',ic:'stethoscope',mes:280,ano:2800,feats:['Tudo do Essencial, e mais:','Internação','DRE e projeção de caixa','Exportações + suporte VIP']}
+];
+function milPt(n){ n=Math.round(n); return n>=1000?(Math.floor(n/1000)+'.'+String(n%1000).padStart(3,'0')):(''+n); }
+function assinarAgora(){ renderTelaPlanos(); }
+function setCicloPlano(ci){ cicloPlano=ci; renderTelaPlanos(); }
+function voltarDosPlanos(){ if(acessoLiberado()){ renderShell(); go(curView||'dash'); } else { renderBloqueioTrial(); } }
+function escolherPlano(id){
+ if(id==='rede'){ openModal({title:'Plano Rede / Multiunidade',body:`<div style="font-size:14px;color:var(--ink);line-height:1.6">Para redes e franquias a gente monta um plano sob medida, a partir de <b>R$ 149/unidade</b>, com painel consolidado das unidades. Fale com a gente que desenhamos a melhor condição.</div>`,foot:`<button class="btn btn-primary" onclick="closeModal()">Entendi</button>`}); return; }
+ const p=PLANOS_ZV.find(x=>x.id===id); if(!p)return;
+ const v=cicloPlano==='mes'?('R$ '+p.mes+'/mês'):('R$ '+milPt(p.ano)+'/ano');
+ openModal({title:'Assinar o plano '+p.nome,body:`<div style="font-size:14px;color:var(--ink);line-height:1.6">Você escolheu o <b>${p.nome}</b> — <b>${v}</b>.<br><br>Em breve o pagamento online ficará disponível aqui dentro. Por enquanto, nossa equipe ativa sua conta rapidinho — é só falar com a gente que liberamos seu plano.</div>`,foot:`<button class="btn" style="border:1px solid var(--line)" onclick="closeModal()">Voltar</button> <button class="btn btn-primary" onclick="closeModal();toast('Show! Vamos ativar seu plano ${p.nome}.')">Quero esse plano</button>`});
+}
+function renderTelaPlanos(){
+ const cards=PLANOS_ZV.map(p=>{
+   const preco=cicloPlano==='mes'?('R$ '+p.mes):('R$ '+milPt(p.ano));
+   const per=cicloPlano==='mes'?'/mês':'/ano';
+   const equiv=cicloPlano==='ano'?`<div class="t-sub" style="margin-top:2px">≈ R$ ${Math.round(p.ano/12)}/mês</div>`:'';
+   const feats=p.feats.map(f=>`<div style="display:flex;gap:8px;align-items:flex-start;font-size:13px;color:var(--ink);padding:3px 0"><span style="color:var(--brand);display:flex;flex-shrink:0">${ic('check',15)}</span><span>${f}</span></div>`).join('');
+   return `<div class="card" style="padding:20px 18px;display:flex;flex-direction:column;${p.pop?'border:2px solid var(--brand);position:relative':''}">
+     ${p.pop?`<div style="position:absolute;top:-11px;left:50%;transform:translateX(-50%);background:var(--brand);color:#fff;font-size:11px;font-weight:700;padding:3px 12px;border-radius:20px;white-space:nowrap">Mais popular</div>`:''}
+     <div style="display:flex;align-items:center;gap:8px;color:var(--brand)">${ic(p.ic,20)}<span style="font-size:16px;font-weight:700;color:var(--ink)">${p.nome}</span></div>
+     <div class="t-sub" style="margin:4px 0 14px">${p.sub}</div>
+     <div style="display:flex;align-items:baseline;gap:4px"><span style="font-size:27px;font-weight:800;color:var(--ink)">${preco}</span><span class="t-sub">${per}</span></div>
+     ${equiv}
+     <div style="margin:14px 0 18px">${feats}</div>
+     <button class="btn ${p.pop?'btn-primary':''}" style="width:100%;margin-top:auto;${p.pop?'':'border:1px solid var(--line);background:var(--surface);color:var(--ink)'}" onclick="escolherPlano('${p.id}')">Assinar</button>
+   </div>`;
+ }).join('');
+ const tab=(ci,lbl,ex)=>`<button onclick="setCicloPlano('${ci}')" style="border:none;background:${cicloPlano===ci?'var(--brand)':'transparent'};color:${cicloPlano===ci?'#fff':'var(--muted)'};padding:8px 16px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer">${lbl}${ex||''}</button>`;
+ const gancho=(i,t)=>`<span style="display:inline-flex;align-items:center;gap:5px">${ic(i,14)} ${t}</span>`;
+ $('#app').innerHTML=`<div style="min-height:100vh;background:var(--bg);padding:26px 18px"><div style="max-width:1000px;margin:0 auto">
+   <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px">
+     <button class="btn" style="border:1px solid var(--line);background:var(--surface)" onclick="voltarDosPlanos()">${ic('chevron',16)} Voltar</button>
+     <div style="display:inline-flex;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px">${tab('mes','Mensal')}${tab('ano','Anual',' <span style="font-size:10.5px;background:var(--brand-soft);color:var(--brand);border-radius:6px;padding:1px 6px;margin-left:3px;font-weight:700">2 meses grátis</span>')}</div>
+   </div>
+   <div style="text-align:center;margin:12px 0 22px">
+     <div style="font-family:'Plus Jakarta Sans';font-weight:800;font-size:24px;color:var(--ink)">Escolha o plano da sua clínica</div>
+     <div class="t-sub">Tudo incluso · usuários ilimitados · migração grátis do SimplesVet</div>
+   </div>
+   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px">${cards}</div>
+   <div class="card" style="margin-top:16px;padding:16px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+     <span style="color:var(--brand);display:flex">${ic('team',22)}</span>
+     <div style="flex:1;min-width:160px"><div style="font-weight:700;color:var(--ink)">Rede / Multiunidade</div><div class="t-sub">Várias unidades num painel só · a partir de R$ 149/unidade</div></div>
+     <button class="btn" style="border:1px solid var(--line);background:var(--surface)" onclick="escolherPlano('rede')">Falar com a gente</button>
+   </div>
+   <div style="display:flex;gap:16px;flex-wrap:wrap;justify-content:center;margin-top:18px;color:var(--muted);font-size:12px">${gancho('check','Tudo incluso')}${gancho('team','Usuários ilimitados')}${gancho('download','Migração grátis')}${gancho('shield','Garantia de 14 dias')}</div>
+ </div></div>`;
+}
 function trialBannerHTML(){
  if(!supaOn()||assinatura.status!=='trial')return '';
  const d=diasTrial(); if(d===null||d<0)return '';
