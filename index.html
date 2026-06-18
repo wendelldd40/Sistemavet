@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Vetória · Gestão Veterinária</title>
+<title>ZeloVet · Gestão Veterinária</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -588,7 +588,7 @@ function seed(){
   {id:uid('as'),planoId:'pl1',clienteId:'c5',petId:nina,inicio:fmtDate(new Date(Y,M-1,15)),proxCobranca:dia(15),status:'ativo',saldo:4,historico:[{data:fmtDate(new Date(Y,M-1,15)),txt:'Assinatura iniciada'}]}
  ];
 
- return {seq:db?db.seq:1000,empresa:{nome:'Clínica Vetória',cnpj:'12.345.678/0001-90',tel:'(79) 3214-5678',end:'Av. Ministro Geraldo Barreto Sobral, 215 — Aracaju/SE',email:'contato@vetoria.com'},
+ return {seq:db?db.seq:1000,empresa:{nome:'Clínica ZeloVet',cnpj:'12.345.678/0001-90',tel:'(79) 3214-5678',end:'Av. Ministro Geraldo Barreto Sobral, 215 — Aracaju/SE',email:'contato@zelovet.com'},
    usuarios,profissionais:prof,clientes,produtos,agendamentos:ag,internacoes,vendas,financeiro:fin,caixa,
    documentos,orcamentos,planos,assinaturas,
    contas:CONTAS_PADRAO.map(c=>({...c})),formasPag:FORMAS_PADRAO.map(f=>({...f})),
@@ -752,8 +752,8 @@ function renderShell(){
  <div class="app">
   <aside class="sidebar" id="sidebar">
    <div class="sb-brand">
-     <div class="mark">${ic('paw',24)}</div>
-     <div class="nm"><b>Vetória</b><span>Gestão Pet</span></div>
+     <div class="mark"><svg viewBox="0 0 64 64" width="26" height="26" aria-hidden="true"><path d="M32 7 L53 15 V31 C53 44 43 52 32 56 C21 52 11 44 11 31 V15 Z" fill="#FFFFFF"/><g fill="#12876C"><ellipse cx="24" cy="27" rx="2.8" ry="3.6"/><ellipse cx="31" cy="23" rx="2.9" ry="3.8"/><ellipse cx="38" cy="23" rx="2.9" ry="3.8"/><ellipse cx="44" cy="27" rx="2.6" ry="3.4"/><path d="M34 30 C28.5 30 25 34 25 37.5 C25 41.5 29.5 42 34 42 C38.5 42 43 41.5 43 37.5 C43 34 39.5 30 34 30 Z"/></g></svg></div>
+     <div class="nm"><b>ZeloVet</b><span>Gestão Pet</span></div>
    </div>
    <div class="sb-scroll" id="navList"></div>
    <div class="sb-foot">
@@ -1240,7 +1240,7 @@ function imprimirCarteira(petId){
  const r=petOf(petId);if(!r)return;const{pet,cliente}=r;const e=db.empresa;
  const w=window.open('','_blank','width=820,height=900');if(!w){toast('Permita pop-ups para imprimir','err');return;}
  const linhas=pet.vacinas.slice().sort((a,b)=>b.data.localeCompare(a.data)).map(v=>`<tr><td>${v.nome}</td><td>${ddmmyy(v.data)}</td><td>${v.proxima?ddmmyy(v.proxima):'—'}</td><td>${v.lote||'—'}</td><td>${profOf(v.profId)?profOf(v.profId).nome:'—'}</td></tr>`).join('')||'<tr><td colspan="5" style="text-align:center;color:#999">Nenhuma vacina registrada</td></tr>';
- w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Carteira de vacinação — ${pet.nome}</title><style>@page{size:A4;margin:16mm}*{box-sizing:border-box;font-family:Arial,Helvetica,sans-serif}body{color:#15302b;margin:0}.hd{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #12876C;padding-bottom:12px}.nm{font-size:22px;font-weight:bold;color:#0F2E29}.sub{font-size:11.5px;color:#666;line-height:1.5}h1{font-size:16px;text-transform:uppercase;letter-spacing:1px;color:#0F2E29;margin:18px 0 10px}.pet{background:#f5f8f6;border-radius:8px;padding:12px 14px;font-size:13px;margin-bottom:14px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #dcdcdc;padding:8px 10px;font-size:12.5px;text-align:left}th{background:#eef4f2}.ft{margin-top:30px;font-size:11px;color:#777;text-align:center}</style></head><body><div class="hd"><div><div class="nm">${e.nome}</div><div class="sub">${e.end}<br>${e.tel} · CNPJ ${e.cnpj}</div></div><div style="font-size:34px">${especieEmoji(pet.especie)}</div></div><h1>Carteira de Vacinação</h1><div class="pet"><b>Pet:</b> ${pet.nome} (${pet.raca}, ${pet.sexo==='M'?'macho':'fêmea'}, ${idade(pet.nasc)}) &nbsp;·&nbsp; <b>Tutor(a):</b> ${cliente.nome} &nbsp;·&nbsp; <b>Emitida em:</b> ${ddmmyy(todayISO())}</div><table><thead><tr><th>Vacina</th><th>Aplicada</th><th>Próxima dose</th><th>Lote</th><th>Responsável</th></tr></thead><tbody>${linhas}</tbody></table><div class="ft">Documento gerado pelo Vetória · mantenha a carteira sempre atualizada</div></body></html>`);
+ w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Carteira de vacinação — ${pet.nome}</title><style>@page{size:A4;margin:16mm}*{box-sizing:border-box;font-family:Arial,Helvetica,sans-serif}body{color:#15302b;margin:0}.hd{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #12876C;padding-bottom:12px}.nm{font-size:22px;font-weight:bold;color:#0F2E29}.sub{font-size:11.5px;color:#666;line-height:1.5}h1{font-size:16px;text-transform:uppercase;letter-spacing:1px;color:#0F2E29;margin:18px 0 10px}.pet{background:#f5f8f6;border-radius:8px;padding:12px 14px;font-size:13px;margin-bottom:14px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #dcdcdc;padding:8px 10px;font-size:12.5px;text-align:left}th{background:#eef4f2}.ft{margin-top:30px;font-size:11px;color:#777;text-align:center}</style></head><body><div class="hd"><div><div class="nm">${e.nome}</div><div class="sub">${e.end}<br>${e.tel} · CNPJ ${e.cnpj}</div></div><div style="font-size:34px">${especieEmoji(pet.especie)}</div></div><h1>Carteira de Vacinação</h1><div class="pet"><b>Pet:</b> ${pet.nome} (${pet.raca}, ${pet.sexo==='M'?'macho':'fêmea'}, ${idade(pet.nasc)}) &nbsp;·&nbsp; <b>Tutor(a):</b> ${cliente.nome} &nbsp;·&nbsp; <b>Emitida em:</b> ${ddmmyy(todayISO())}</div><table><thead><tr><th>Vacina</th><th>Aplicada</th><th>Próxima dose</th><th>Lote</th><th>Responsável</th></tr></thead><tbody>${linhas}</tbody></table><div class="ft">Documento gerado pelo ZeloVet · mantenha a carteira sempre atualizada</div></body></html>`);
  w.document.close();setTimeout(()=>{try{w.print();}catch(e){}},350);
 }
 function calcDose(petId){
@@ -1741,8 +1741,8 @@ function baixarCSV(nome,headers,rows){
 }
 function imprimirRelatorio(titulo,inner){
  const w=window.open('','_blank'); if(!w){toast('Permita pop-ups para exportar em PDF','err');return;}
- const emp=(db.config&&db.config.nome)||'Vetória';
- w.document.write(`<html><head><title>${titulo}</title><meta charset="utf-8"><style>body{font-family:Arial,Helvetica,sans-serif;color:#1a1a1a;padding:30px;max-width:780px;margin:auto}h1{font-size:20px;color:#10463A;margin:4px 0 2px}h2{font-size:14px;margin:18px 0 6px}table{width:100%;border-collapse:collapse;margin:10px 0}th,td{border:1px solid #e2e2e2;padding:7px 9px;font-size:12.5px;text-align:left}th{background:#eef4f2}.num{text-align:right}.tot td{font-weight:700;background:#f5faf8}.sub{color:#777;font-size:11.5px}@media print{body{padding:0}}</style></head><body><div class="sub">${emp} · emitido em ${ddmmyy(todayISO())}</div><h1>${titulo}</h1>${inner}<div class="sub" style="margin-top:24px">Gerado pelo Vetória</div></body></html>`);
+ const emp=(db.config&&db.config.nome)||'ZeloVet';
+ w.document.write(`<html><head><title>${titulo}</title><meta charset="utf-8"><style>body{font-family:Arial,Helvetica,sans-serif;color:#1a1a1a;padding:30px;max-width:780px;margin:auto}h1{font-size:20px;color:#10463A;margin:4px 0 2px}h2{font-size:14px;margin:18px 0 6px}table{width:100%;border-collapse:collapse;margin:10px 0}th,td{border:1px solid #e2e2e2;padding:7px 9px;font-size:12.5px;text-align:left}th{background:#eef4f2}.num{text-align:right}.tot td{font-weight:700;background:#f5faf8}.sub{color:#777;font-size:11.5px}@media print{body{padding:0}}</style></head><body><div class="sub">${emp} · emitido em ${ddmmyy(todayISO())}</div><h1>${titulo}</h1>${inner}<div class="sub" style="margin-top:24px">Gerado pelo ZeloVet</div></body></html>`);
  w.document.close(); setTimeout(()=>{try{w.focus();w.print();}catch(e){}},350);
 }
 function exportarDRE(fmt){
@@ -2088,7 +2088,7 @@ function renderCfgBody(){
          <div class="frow"><div class="field" style="margin:0;flex:1.4"><label>E-mail</label><input class="inp" id="cvEmail" type="email" placeholder="pessoa@email.com"></div>
          <div class="field" style="margin:0"><label>Perfil</label><select class="sel" id="cvPapel"><option value="recepcao">Recepção</option><option value="veterinario">Veterinário</option><option value="dono">Dono / Admin</option></select></div></div>
          <button class="btn btn-primary btn-sm" id="cvBtn" style="margin-top:10px" onclick="convidarMembro()">${ic('check',14)} Gerar convite</button>
-         <div class="t-sub" style="margin-top:8px;display:flex;align-items:center;gap:6px">${ic('alert',13)} A pessoa se cadastra no Vetória e usa o código gerado para entrar já no perfil certo.</div>
+         <div class="t-sub" style="margin-top:8px;display:flex;align-items:center;gap:6px">${ic('alert',13)} A pessoa se cadastra no ZeloVet e usa o código gerado para entrar já no perfil certo.</div>
        </div>
 
        ${eqConvites.length?`<div class="card" style="margin-top:14px;max-width:560px"><div class="card-head"><h3>Convites pendentes</h3></div>
@@ -2314,7 +2314,7 @@ async function migrarLocalParaNuvem(){
 function renderAuth(modo){ modo=modo||'login';
   $('#app').innerHTML=`<div style="min-height:100vh;display:grid;place-items:center;background:var(--bg);padding:20px">
     <div class="card" style="width:100%;max-width:380px;padding:30px 26px">
-      <div style="text-align:center;margin-bottom:20px"><div style="font-family:'Plus Jakarta Sans';font-weight:800;font-size:24px;color:var(--brand)">Vetória</div><div class="t-sub">${modo==='login'?'Entre na sua conta':'Crie sua conta'}</div></div>
+      <div style="text-align:center;margin-bottom:20px"><div style="width:60px;height:60px;border-radius:18px;background:linear-gradient(135deg,var(--brand),#1AB38C);display:grid;place-items:center;margin:0 auto 14px;box-shadow:0 8px 22px rgba(18,135,108,.4)"><svg viewBox="0 0 64 64" width="32" height="32" aria-hidden="true"><path d="M32 7 L53 15 V31 C53 44 43 52 32 56 C21 52 11 44 11 31 V15 Z" fill="#FFFFFF"/><g fill="#12876C"><ellipse cx="24" cy="27" rx="2.8" ry="3.6"/><ellipse cx="31" cy="23" rx="2.9" ry="3.8"/><ellipse cx="38" cy="23" rx="2.9" ry="3.8"/><ellipse cx="44" cy="27" rx="2.6" ry="3.4"/><path d="M34 30 C28.5 30 25 34 25 37.5 C25 41.5 29.5 42 34 42 C38.5 42 43 41.5 43 37.5 C43 34 39.5 30 34 30 Z"/></g></svg></div><div style="font-family:'Plus Jakarta Sans';font-weight:800;font-size:24px;color:var(--brand)">ZeloVet</div><div class="t-sub">${modo==='login'?'Entre na sua conta':'Crie sua conta'}</div></div>
       <div class="field"><label>E-mail</label><input class="inp" id="auEmail" type="email" placeholder="voce@email.com"></div>
       <div class="field"><label>Senha</label><input class="inp" id="auSenha" type="password" placeholder="••••••••"></div>
       ${modo==='signup'?`<div class="field"><label>Seu nome</label><input class="inp" id="auNome" placeholder="Como quer ser chamado(a)"></div>`:''}
@@ -2325,7 +2325,7 @@ function renderAuth(modo){ modo=modo||'login';
 }
 function renderSplash(msg){
  $('#app').innerHTML=`<div style="min-height:100vh;display:grid;place-items:center;background:var(--bg)"><div style="text-align:center"><style>@keyframes vetspin{to{transform:rotate(360deg)}}</style>
-   <div style="font-family:'Plus Jakarta Sans';font-weight:800;font-size:26px;color:var(--brand);margin-bottom:16px">Vetória</div>
+   <div style="font-family:'Plus Jakarta Sans';font-weight:800;font-size:26px;color:var(--brand);margin-bottom:16px">ZeloVet</div>
    <div style="width:34px;height:34px;border:3px solid var(--brand-soft);border-top-color:var(--brand);border-radius:50%;margin:0 auto;animation:vetspin .8s linear infinite"></div>
    <div class="t-sub" style="margin-top:14px">${msg||'Carregando…'}</div></div></div>`;
 }
@@ -2373,7 +2373,7 @@ async function fazerCadastro(){ const email=$('#auEmail').value.trim(),senha=$('
   try{ const {data,error}=await sb.auth.signUp({email,password:senha}); if(error)throw error; sessionStorage.setItem('vet_nome',nome||''); if(!data.session){ toast('Conta criada! Confirme o e-mail (se exigido) e faça login.'); renderAuth('login'); return; } iniciar(); }catch(err){ toast(err.message||'Falha no cadastro','err'); if($('#auBtn'))$('#auBtn').textContent='Criar conta'; } }
 function renderOnboarding(){ $('#app').innerHTML=`<div style="min-height:100vh;display:grid;place-items:center;background:var(--bg);padding:20px">
     <div class="card" style="width:100%;max-width:420px;padding:30px 26px">
-      <div style="font-family:'Plus Jakarta Sans';font-weight:800;font-size:20px;margin-bottom:4px">Bem-vindo ao Vetória</div>
+      <div style="font-family:'Plus Jakarta Sans';font-weight:800;font-size:20px;margin-bottom:4px">Bem-vindo ao ZeloVet</div>
       <div class="t-sub" style="margin-bottom:18px">Entre na clínica que te convidou ou crie a sua.</div>
       <div class="field"><label>Seu nome</label><input class="inp" id="obMeu" value="${sessionStorage.getItem('vet_nome')||''}" placeholder="Seu nome"></div>
       <div style="background:var(--surface-2);border-radius:12px;padding:14px;margin-bottom:16px">
@@ -2391,8 +2391,8 @@ function renderBloqueioTrial(){
  $('#app').innerHTML=`<div style="min-height:100vh;display:grid;place-items:center;background:var(--bg);padding:20px"><div class="card" style="max-width:430px;padding:32px 28px;text-align:center">
    <div style="width:56px;height:56px;border-radius:16px;background:var(--gold-soft);color:var(--gold);display:grid;place-items:center;margin:0 auto 14px">${ic('clock',28)}</div>
    <div style="font-family:'Plus Jakarta Sans';font-weight:800;font-size:20px;margin-bottom:6px">Seu teste grátis terminou</div>
-   <div class="t-sub" style="margin-bottom:20px">Os 7 dias de avaliação do Vetória chegaram ao fim. Assine para continuar com todos os recursos e seus dados intactos.</div>
-   <button class="btn btn-primary" style="width:100%" onclick="assinarAgora()">${ic('check',15)} Assinar o Vetória</button>
+   <div class="t-sub" style="margin-bottom:20px">Os 7 dias de avaliação do ZeloVet chegaram ao fim. Assine para continuar com todos os recursos e seus dados intactos.</div>
+   <button class="btn btn-primary" style="width:100%" onclick="assinarAgora()">${ic('check',15)} Assinar o ZeloVet</button>
    <div style="margin-top:12px"><a href="#" onclick="if(confirm('Sair da conta?'))sairConta();return false" class="t-sub" style="text-decoration:underline">Sair da conta</a></div>
  </div></div>`;
 }
