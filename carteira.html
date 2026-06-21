@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Carteirinha Digital</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--brand:#12876C;--ink:#0F2E29;--muted:#6b7d77;--bg:#EEF3F0;--surface:#fff;--line:#E1EAE6;--ok:#1FA971;--ok-s:#DBF3E8;--gold:#EFA42F;--gold-s:#FCEFD6;--danger:#E5544B;--danger-s:#FBE4E2;}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink);padding:0 0 40px}
+.wrap{max-width:440px;margin:0 auto;padding:16px}
+.head{background:linear-gradient(135deg,#0F2E29,#12876C);color:#fff;border-radius:0 0 22px 22px;padding:26px 20px 22px;text-align:center}
+.head .logo{width:46px;height:46px;border-radius:13px;background:rgba(255,255,255,.15);display:inline-grid;place-items:center;margin-bottom:10px}
+.head h1{margin:0;font-size:18px;font-weight:800}
+.head .sub{font-size:12.5px;opacity:.85;margin-top:3px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;margin-top:14px;box-shadow:0 2px 8px rgba(15,46,41,.05)}
+.pet-top{display:flex;align-items:center;gap:14px}
+.pet-emoji{width:60px;height:60px;border-radius:16px;background:var(--bg);display:grid;place-items:center;font-size:32px;flex-shrink:0}
+.pet-top h2{margin:0;font-size:20px;font-weight:800}
+.pet-top .t{font-size:13px;color:var(--muted);margin-top:2px}
+.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:14px}
+.grid .it{background:var(--bg);border-radius:11px;padding:9px 10px}
+.grid .it .l{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.grid .it .v{font-size:14px;font-weight:700;margin-top:1px}
+.sec{font-size:13px;font-weight:800;margin:20px 4px 8px;display:flex;align-items:center;gap:7px}
+.vac{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 0;border-bottom:1px solid var(--line)}
+.vac:last-child{border-bottom:none}
+.vac .nm{font-weight:700;font-size:14px}
+.vac .dt{font-size:12px;color:var(--muted);margin-top:2px}
+.badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap}
+.b-ok{background:var(--ok-s);color:var(--ok)}.b-gold{background:var(--gold-s);color:#9a6b00}.b-dng{background:var(--danger-s);color:var(--danger)}.b-gray{background:#eef0ef;color:var(--muted)}
+.empty{text-align:center;color:var(--muted);font-size:13px;padding:18px}
+.foot{text-align:center;color:var(--muted);font-size:11.5px;margin-top:22px}
+.foot b{color:var(--brand)}
+.load,.err{text-align:center;padding:60px 20px;color:var(--muted)}
+.spin{width:30px;height:30px;border:3px solid var(--line);border-top-color:var(--brand);border-radius:50%;animation:s 1s linear infinite;margin:0 auto 14px}
+@keyframes s{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div id="app"><div class="load"><div class="spin"></div>Carregando carteirinha…</div></div>
+<script>
+const SUPA_URL='https://nrntinlwmsxxugmxxoud.supabase.co';
+const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ybnRpbmx3bXN4eHVnbXh4b3VkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1OTIwNDEsImV4cCI6MjA5NzE2ODA0MX0.AkZZUbomQQp3idmlzSflngFdwUiI-kD7Kr_EzwISX_w';
+const sb=supabase.createClient(SUPA_URL,SUPA_KEY,{auth:{persistSession:false}});
+const $=s=>document.querySelector(s);
+
+const EMOJI={cao:'🐶',cão:'🐶',gato:'🐱',ave:'🦜',passaro:'🦜',coelho:'🐰',roedor:'🐹',hamster:'🐹',reptil:'🦎',tartaruga:'🐢',peixe:'🐠'};
+function emoji(e){ return EMOJI[(e||'').toLowerCase()]||'🐾'; }
+function ddmm(s){ if(!s)return '—'; const p=String(s).slice(0,10).split('-'); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:s; }
+function idade(nasc){ if(!nasc)return '—'; const n=new Date(nasc),h=new Date(); let m=(h.getFullYear()-n.getFullYear())*12+(h.getMonth()-n.getMonth()); if(h.getDate()<n.getDate())m--; if(m<0)return '—'; const a=Math.floor(m/12),me=m%12; if(a<=0)return me+(me===1?' mês':' meses'); return a+(a===1?' ano':' anos')+(me?` e ${me}m`:''); }
+function dias(proxima){ if(!proxima)return null; const d=new Date(String(proxima).slice(0,10)),h=new Date(); h.setHours(0,0,0,0); return Math.round((d-h)/86400000); }
+function statusVac(v){
+  const d=dias(v.proxima);
+  if(d===null) return ['<span class="badge b-gray">dose única</span>',''];
+  if(d<0) return [`<span class="badge b-dng">${Math.abs(d)}d em atraso</span>`,''];
+  if(d<=30) return [`<span class="badge b-gold">vence em ${d}d</span>`,''];
+  return ['<span class="badge b-ok">em dia</span>',''];
+}
+
+async function carregar(){
+  const token=new URLSearchParams(location.search).get('t');
+  if(!token){ return erro('Link inválido', 'Esta carteirinha não tem um código válido.'); }
+  try{
+    const { data, error } = await sb.rpc('carteira_publica',{ p_token: token });
+    if(error) throw error;
+    if(!data){ return erro('Carteirinha não encontrada','O código pode ter expirado ou estar incorreto. Peça um novo link à clínica.'); }
+    render(data);
+  }catch(e){ erro('Não foi possível carregar','Tente novamente em instantes.'); }
+}
+
+function erro(t,s){ $('#app').innerHTML=`<div class="err"><div style="font-size:40px;margin-bottom:10px">🐾</div><div style="font-weight:800;color:var(--ink);font-size:16px">${t}</div><div style="margin-top:6px">${s}</div></div>`; }
+
+function render(d){
+  const p=d.pet||{}, vacs=Array.isArray(d.vacinas)?d.vacinas.slice():[];
+  vacs.sort((a,b)=>String(b.data||'').localeCompare(String(a.data||'')));
+  const linhas = vacs.length ? vacs.map(v=>{
+    const [bd]=statusVac(v);
+    return `<div class="vac"><div><div class="nm">${v.nome||'Vacina'}</div><div class="dt">Aplicada em ${ddmm(v.data)}${v.proxima?` · próxima ${ddmm(v.proxima)}`:''}${v.lote?` · lote ${v.lote}`:''}</div></div>${bd}</div>`;
+  }).join('') : `<div class="empty">Nenhuma vacina registrada ainda.</div>`;
+
+  const it=(l,v)=>`<div class="it"><div class="l">${l}</div><div class="v">${v||'—'}</div></div>`;
+  $('#app').innerHTML=`
+    <div class="head">
+      <div class="logo">
+        <svg viewBox="0 0 64 64" width="26" height="26" aria-hidden="true"><path d="M32 7 L53 15 V31 C53 44 43 52 32 56 C21 52 11 44 11 31 V15 Z" fill="#FFFFFF"/><g fill="#12876C"><ellipse cx="24" cy="27" rx="2.8" ry="3.6"/><ellipse cx="31" cy="23" rx="2.9" ry="3.8"/><ellipse cx="38" cy="23" rx="2.9" ry="3.8"/><ellipse cx="44" cy="27" rx="2.6" ry="3.4"/><path d="M34 30 C28.5 30 25 34 25 37.5 C25 41.5 29.5 42 34 42 C38.5 42 43 41.5 43 37.5 C43 34 39.5 30 34 30 Z"/></g></svg>
+      </div>
+      <h1>${d.clinica||'Clínica'}</h1>
+      <div class="sub">Carteira de Vacinação Digital</div>
+    </div>
+    <div class="wrap">
+      <div class="card">
+        <div class="pet-top">
+          <div class="pet-emoji">${emoji(p.especie)}</div>
+          <div><h2>${p.nome||'Pet'}</h2><div class="t">${p.raca||p.especie||''}${d.tutor?` · Tutor: ${d.tutor}`:''}</div></div>
+        </div>
+        <div class="grid">
+          ${it('Idade', idade(p.nasc))}
+          ${it('Sexo', p.sexo==='M'?'Macho':p.sexo==='F'?'Fêmea':(p.sexo||'—'))}
+          ${it('Porte', p.porte?p.porte.charAt(0).toUpperCase()+p.porte.slice(1):'—')}
+          ${it('Peso', p.peso?p.peso+' kg':'—')}
+          ${it('Pelagem', p.cor)}
+          ${it('Espécie', p.especie?p.especie.charAt(0).toUpperCase()+p.especie.slice(1):'—')}
+        </div>
+      </div>
+      <div class="card">
+        <div class="sec">💉 Vacinas</div>
+        ${linhas}
+      </div>
+      <div class="foot">Carteirinha gerada por <b>ZeloVet</b> · os dados são mantidos pela clínica</div>
+    </div>`;
+}
+carregar();
+</script>
+</body>
+</html>
